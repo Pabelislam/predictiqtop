@@ -21,73 +21,38 @@ input::placeholder{color:#445566}
 <div id="root"></div>
 <script type="text/babel">
 const {useState,useRef} = React;
-
 const GRID={position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(0,255,157,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,157,0.02) 1px,transparent 1px)",backgroundSize:"40px 40px",pointerEvents:"none",zIndex:0};
 
+/* ── PROVIDERS ─────────────────────────────────────────────────── */
 const PROVIDERS=[
   {
-    id:"groq",
-    name:"Groq",
-    icon:"⚡",
-    color:"#f55036",
+    id:"groq",name:"Groq (ফ্রি)",icon:"⚡",color:"#f55036",
+    badge:"🆓 সম্পূর্ণ ফ্রি",badgeColor:"#00ff9d",
     placeholder:"gsk_...",
-    badge:"🆓 সম্পূর্ণ ফ্রি",
-    badgeColor:"#00ff9d",
-    steps:[
-      "console.groq.com এ যান",
-      "Google দিয়ে Sign up করুন (ফ্রি)",
-      "\"API Keys\" → \"Create API Key\"",
-      "Key copy করে এখানে paste করুন"
-    ],
-    note:"কোনো card লাগবে না · প্রতিদিন হাজার request ফ্রি"
+    note:"কোনো card লাগবে না · প্রতিদিন হাজার request ফ্রি",
+    steps:["console.groq.com এ যান","Google দিয়ে Sign up করুন","\"API Keys\" → \"Create API Key\"","Key copy করে paste করুন"],
+    visionNote:"📸 Screenshot এর জন্য আলাদা Gemini Key লাগবে (ফ্রি)"
   },
   {
-    id:"gemini",
-    name:"Google Gemini",
-    icon:"🟦",
-    color:"#4285f4",
+    id:"gemini",name:"Google Gemini",icon:"🟦",color:"#4285f4",
+    badge:"🆓 ফ্রি tier",badgeColor:"#4285f4",
     placeholder:"AIzaSy...",
-    badge:"🆓 ফ্রি tier আছে",
-    badgeColor:"#4285f4",
-    steps:[
-      "aistudio.google.com এ যান",
-      "Google দিয়ে Sign in করুন",
-      "\"Get API Key\" → \"Create API key\"",
-      "Key copy করে এখানে paste করুন"
-    ],
-    note:"Google account থাকলেই হবে · ফ্রি quota আছে"
+    note:"Google account থাকলেই হবে",
+    steps:["aistudio.google.com এ যান","Google দিয়ে Sign in করুন","\"Get API Key\" → \"Create API key\"","Key copy করে paste করুন"],
   },
   {
-    id:"openai",
-    name:"ChatGPT (OpenAI)",
-    icon:"🟩",
-    color:"#10a37f",
+    id:"openai",name:"ChatGPT",icon:"🟩",color:"#10a37f",
+    badge:"💳 Paid",badgeColor:"#ffc107",
     placeholder:"sk-proj-...",
-    badge:"💳 Paid",
-    badgeColor:"#ffc107",
-    steps:[
-      "platform.openai.com এ যান",
-      "Sign up / Login করুন",
-      "\"API Keys\" → \"Create new secret key\"",
-      "Key copy করে এখানে paste করুন"
-    ],
-    note:"নতুন account এ কিছু free credit পেতে পারেন"
+    note:"Credit কিনতে হবে",
+    steps:["platform.openai.com এ যান","Sign up / Login","\"API Keys\" → \"Create key\"","Key copy করে paste করুন"],
   },
   {
-    id:"anthropic",
-    name:"Anthropic Claude",
-    icon:"🟧",
-    color:"#ff6b35",
+    id:"anthropic",name:"Claude",icon:"🟧",color:"#ff6b35",
+    badge:"💳 Paid",badgeColor:"#ffc107",
     placeholder:"sk-ant-...",
-    badge:"💳 Paid",
-    badgeColor:"#ffc107",
-    steps:[
-      "console.anthropic.com এ যান",
-      "Sign up / Login করুন",
-      "\"API Keys\" → \"Create Key\"",
-      "Key copy করে এখানে paste করুন"
-    ],
-    note:"Minimum $5 credit কিনতে হবে"
+    note:"Minimum $5 credit",
+    steps:["console.anthropic.com এ যান","Sign up / Login","\"API Keys\" → \"Create Key\"","Key copy করে paste করুন"],
   },
 ];
 
@@ -108,116 +73,137 @@ const MARKETS={
 const RC={Low:"#00ff9d",Medium:"#ffc107",High:"#ff4d4d"};
 const RB={Low:"rgba(0,255,157,0.08)",Medium:"rgba(255,193,7,0.08)",High:"rgba(255,77,77,0.08)"};
 
-function getCfg(){try{const s=localStorage.getItem("piq2");return s?JSON.parse(s):null;}catch{return null;}}
-function saveCfg(c){try{localStorage.setItem("piq2",JSON.stringify(c));}catch{}}
-function clearCfg(){try{localStorage.removeItem("piq2");}catch{}}
+/* ── STORAGE ────────────────────────────────────────────────────── */
+function getCfg(){try{const s=localStorage.getItem("piq3");return s?JSON.parse(s):null;}catch{return null;}}
+function saveCfg(c){try{localStorage.setItem("piq3",JSON.stringify(c));}catch{}}
+function clearCfg(){try{localStorage.removeItem("piq3");}catch{}}
+function fileToBase64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(f);});}
+function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"),e=c.lastIndexOf("}");if(s<0||e<0)throw new Error("JSON পাওয়া যায়নি");return JSON.parse(c.slice(s,e+1));}
+function pja(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("["),e=c.lastIndexOf("]");if(s<0||e<0)throw new Error("Array JSON পাওয়া যায়নি");return JSON.parse(c.slice(s,e+1));}
 
-function fileToBase64(file){
-  return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload=()=>res(r.result.split(",")[1]);
-    r.onerror=rej;
-    r.readAsDataURL(file);
+/* ── STEP 1: Extract ALL matches from screenshot using Gemini Vision ── */
+async function extractMatchesFromImage(geminiKey, imgB64, mime){
+  const prompt = `You are a sports betting data extractor. Look at this betting app screenshot carefully.
+Extract ALL matches/games visible on screen. For each match extract: teams, sport, league, and all visible odds/markets.
+
+Respond ONLY in valid JSON array (no markdown, no backticks):
+[
+  {
+    "teamA": "<team name>",
+    "teamB": "<team name>", 
+    "sport": "<Football|Cricket|Basketball|Tennis|Hockey>",
+    "league": "<league name or Unknown>",
+    "markets": ["<market1: odds>", "<market2: odds>"],
+    "rawOdds": "<all visible odds as text>"
+  }
+]
+Include EVERY match visible. Do not skip any.`;
+
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime||"image/png",data:imgB64}}]}]})
   });
+  const data = await resp.json();
+  if(data.error) throw new Error("Gemini Vision: "+data.error.message);
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text||"";
+  return pja(text);
 }
 
-function buildPrompt(manualData){
-  if(!manualData) return `You are a sports betting analyst AI. Read this betting screenshot carefully.
-Extract team names, sport, league, odds, available markets. Give detailed predictions.
-Respond ONLY in valid JSON (no markdown, no backticks, no explanation):
-{"teamA":"<n>","teamB":"<n>","sport":"<Football|Cricket|Basketball|Tennis|Hockey>","league":"<l>","confidence":<60-92>,"winProb":<55-88>,"riskLevel":"<Low|Medium|High>","predictions":[{"market":"<m>","prediction":"<pick>","prob":<50-90>,"risk":"<Low|Medium|High>","best":<true|false>}],"analysis":"<2 sentences>","keyFactors":["<f1>","<f2>","<f3>"],"detectedOdds":"<summary>"}`;
-  return `You are a sports betting analyst AI.
+/* ── STEP 2: Get AI predictions for each match ── */
+async function getPredictionsForMatch(pid, key, matchData){
+  const prompt = `You are a sports betting analyst AI.
+Match: ${matchData.teamA} vs ${matchData.teamB}
+Sport: ${matchData.sport}, League: ${matchData.league}
+Visible odds/markets: ${matchData.rawOdds||matchData.markets?.join(", ")||"Standard markets"}
+
+Based on this data, provide detailed predictions for all available markets.
+Respond ONLY in valid JSON (no markdown):
+{
+  "teamA":"${matchData.teamA}",
+  "teamB":"${matchData.teamB}",
+  "sport":"${matchData.sport}",
+  "league":"${matchData.league}",
+  "confidence":<60-92>,
+  "winProb":<55-88>,
+  "riskLevel":"<Low|Medium|High>",
+  "predictions":[
+    {"market":"<market>","prediction":"<pick>","prob":<50-90>,"risk":"<Low|Medium|High>","best":<true|false>}
+  ],
+  "analysis":"<2 sentence match analysis>",
+  "keyFactors":["<f1>","<f2>","<f3>"]
+}`;
+
+  if(pid==="groq"){
+    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
+      body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    });
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error.message);
+    return pj(data.choices?.[0]?.message?.content||"");
+  }
+  if(pid==="gemini"){
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    });
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error.message);
+    return pj(data.candidates?.[0]?.content?.parts?.[0]?.text||"");
+  }
+  if(pid==="openai"){
+    const resp = await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
+      body:JSON.stringify({model:"gpt-4o-mini",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    });
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error.message);
+    return pj(data.choices?.[0]?.message?.content||"");
+  }
+  if(pid==="anthropic"){
+    const resp = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    });
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error.message);
+    return pj(data.content.map(b=>b.text||"").join(""));
+  }
+}
+
+/* ── MANUAL prediction ── */
+async function getManualPrediction(pid, key, manualData){
+  const prompt = `Sports betting analyst AI.
 Match: ${manualData.teamA} vs ${manualData.teamB}
 Sport: ${manualData.sport}, League: ${manualData.league||"Unknown"}
 Markets: ${manualData.markets.join(", ")}
-Respond ONLY in valid JSON (no markdown, no backticks):
+Respond ONLY in valid JSON (no markdown):
 {"teamA":"${manualData.teamA}","teamB":"${manualData.teamB}","sport":"${manualData.sport}","league":"${manualData.league||"Unknown"}","confidence":<60-92>,"winProb":<55-88>,"riskLevel":"<Low|Medium|High>","predictions":[{"market":"<m>","prediction":"<pick>","prob":<50-90>,"risk":"<Low|Medium|High>","best":<true|false>}],"analysis":"<2 sentences>","keyFactors":["<f1>","<f2>","<f3>"]}`;
+
+  if(pid==="groq"){
+    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
+      body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    });
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error.message);
+    return pj(data.choices?.[0]?.message?.content||"");
+  }
+  return getPredictionsForMatch(pid,key,{...manualData,rawOdds:manualData.markets.join(", ")});
 }
 
-function parseJSON(text){
-  const clean = text.replace(/```json|```/g,"").trim();
-  const start = clean.indexOf("{");
-  const end = clean.lastIndexOf("}");
-  if(start===-1||end===-1) throw new Error("JSON পাওয়া যায়নি");
-  return JSON.parse(clean.slice(start,end+1));
-}
-
-async function callGroq(key,img,mime,manual){
-  const prompt = buildPrompt(manual);
-  // Groq doesn't support vision for free, use text-only
-  const content = img
-    ? `${prompt}\n\n[Note: Screenshot uploaded but vision not available in free tier. Please analyze based on common betting patterns for the sport detected.]`
-    : prompt;
-  const resp = await fetch("https://api.groq.com/openai/v1/chat/completions",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
-    body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:1200,messages:[{role:"user",content}]})
-  });
-  const data = await resp.json();
-  if(data.error) throw new Error(data.error.message||"Groq Error");
-  return parseJSON(data.choices?.[0]?.message?.content||"");
-}
-
-async function callGemini(key,img,mime,manual){
-  const prompt = buildPrompt(manual);
-  const parts = img
-    ? [{text:prompt},{inline_data:{mime_type:mime||"image/png",data:img}}]
-    : [{text:prompt}];
-  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({contents:[{parts}]})
-  });
-  const data = await resp.json();
-  if(data.error) throw new Error(data.error.message||"Gemini Error");
-  return parseJSON(data.candidates?.[0]?.content?.parts?.[0]?.text||"");
-}
-
-async function callOpenAI(key,img,mime,manual){
-  const prompt = buildPrompt(manual);
-  const content = img
-    ? [{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime||"image/png"};base64,${img}`}}]
-    : prompt;
-  const resp = await fetch("https://api.openai.com/v1/chat/completions",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
-    body:JSON.stringify({model:img?"gpt-4o":"gpt-4o-mini",max_tokens:1200,messages:[{role:"user",content}]})
-  });
-  const data = await resp.json();
-  if(data.error) throw new Error(data.error.message||"OpenAI Error");
-  return parseJSON(data.choices?.[0]?.message?.content||"");
-}
-
-async function callAnthropic(key,img,mime,manual){
-  const prompt = buildPrompt(manual);
-  const messages = img
-    ? [{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime||"image/png",data:img}},{type:"text",text:prompt}]}]
-    : [{role:"user",content:prompt}];
-  const resp = await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages})
-  });
-  const data = await resp.json();
-  if(data.error) throw new Error(data.error.message||"Anthropic Error");
-  return parseJSON(data.content.map(b=>b.text||"").join(""));
-}
-
-async function callAI(pid,key,img,mime,manual){
-  if(pid==="groq") return callGroq(key,img,mime,manual);
-  if(pid==="gemini") return callGemini(key,img,mime,manual);
-  if(pid==="openai") return callOpenAI(key,img,mime,manual);
-  if(pid==="anthropic") return callAnthropic(key,img,mime,manual);
-  throw new Error("Unknown provider");
-}
-
-// ── UI ───────────────────────────────────────────────────────────
+/* ── UI Components ──────────────────────────────────────────────── */
 function ProbBar({v,c}){
   return <div style={{background:"rgba(255,255,255,0.06)",borderRadius:4,height:7,overflow:"hidden"}}>
     <div style={{height:"100%",width:`${v}%`,background:`linear-gradient(90deg,${c}77,${c})`,boxShadow:`0 0 8px ${c}44`,transition:"width 1.2s ease",borderRadius:4}}/>
   </div>;
 }
-
 function Ring({value,label,color}){
   const r=27,c=2*Math.PI*r,d=(value/100)*c;
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
@@ -229,14 +215,13 @@ function Ring({value,label,color}){
     <span style={{color:"#667788",fontSize:10,fontWeight:700,letterSpacing:0.7}}>{label}</span>
   </div>;
 }
-
 function PCard({market,prob,risk,best}){
-  return <div style={{background:best?"rgba(0,255,157,0.06)":"rgba(255,255,255,0.025)",border:`1px solid ${best?"#00ff9d33":"#ffffff0d"}`,borderRadius:11,padding:"11px 14px",position:"relative"}}>
+  return <div style={{background:best?"rgba(0,255,157,0.06)":"rgba(255,255,255,0.025)",border:`1px solid ${best?"#00ff9d33":"#ffffff0d"}`,borderRadius:10,padding:"11px 14px",position:"relative"}}>
     {best&&<span style={{position:"absolute",top:-9,right:11,background:"#00ff9d",color:"#040e08",fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20}}>BEST PICK</span>}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
       <span style={{color:"#c8d8e8",fontSize:13,fontWeight:500,flex:1,marginRight:10,lineHeight:1.4}}>{market}</span>
       <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-        <span style={{background:RB[risk],color:RC[risk],fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,border:`1px solid ${RC[risk]}22`}}>{risk}</span>
+        <span style={{background:RB[risk],color:RC[risk],fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,border:`1px solid ${RC[risk]}22`}}>{risk}</span>
         <span style={{color:RC[risk],fontSize:18,fontWeight:900,fontFamily:"monospace"}}>{prob}%</span>
       </div>
     </div>
@@ -244,124 +229,140 @@ function PCard({market,prob,risk,best}){
   </div>;
 }
 
-function ResultView({r,onAdd,pcolor}){
-  return <div style={{display:"flex",flexDirection:"column",gap:13}}>
-    <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.12)",borderRadius:16,padding:18}}>
-      <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+function MatchResultCard({r,idx,onAdd,pcolor,onSelect,selected}){
+  const [open,setOpen]=useState(idx===0);
+  return(
+    <div style={{background:selected?"rgba(0,255,157,0.04)":"rgba(255,255,255,0.02)",border:`1.5px solid ${selected?"rgba(0,255,157,0.3)":"rgba(255,255,255,0.07)"}`,borderRadius:14,overflow:"hidden",transition:"all .2s"}}>
+      {/* Match header - always visible */}
+      <div onClick={()=>setOpen(o=>!o)} style={{padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{flex:1,minWidth:0}}>
-          <p style={{color:"#3a5244",fontSize:11,fontWeight:700,letterSpacing:1.2,margin:"0 0 4px"}}>{r.sport?.toUpperCase()} · {r.league}</p>
-          <h2 style={{margin:0,fontSize:18,fontWeight:900,color:"#fff",wordBreak:"break-word"}}>{r.teamA} <span style={{color:"#253530"}}>vs</span> {r.teamB}</h2>
-          <p style={{color:"#6a8090",fontSize:13,margin:"7px 0 0",lineHeight:1.6}}>{r.analysis}</p>
-          {r.detectedOdds&&<p style={{color:"#3a5060",fontSize:12,margin:"5px 0 0"}}>📊 {r.detectedOdds}</p>}
+          <p style={{color:"#3a5244",fontSize:10,fontWeight:700,letterSpacing:1,margin:"0 0 3px"}}>{r.sport?.toUpperCase()} · {r.league}</p>
+          <h3 style={{color:"#fff",fontSize:15,fontWeight:900,margin:0,wordBreak:"break-word"}}>{r.teamA} <span style={{color:"#253530"}}>vs</span> {r.teamB}</h3>
         </div>
-        <div style={{display:"flex",gap:12,flexShrink:0,alignItems:"center"}}>
-          <Ring value={r.winProb} label="WIN PROB" color="#00ff9d"/>
-          <Ring value={r.confidence} label="CONFIDENCE" color="#3b9eff"/>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,marginLeft:10}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{color:"#00ff9d",fontSize:18,fontWeight:900,fontFamily:"monospace",lineHeight:1}}>{r.winProb}%</div>
+            <div style={{color:"#3a5244",fontSize:9,fontWeight:700}}>WIN</div>
+          </div>
+          <div style={{color:"#445566",fontSize:18}}>{open?"▲":"▼"}</div>
         </div>
       </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
-        {r.keyFactors?.map(f=><span key={f} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:20,padding:"3px 10px",fontSize:11,color:"#6a8090"}}>📌 {f}</span>)}
-      </div>
+
+      {/* Expanded content */}
+      {open&&<div style={{padding:"0 16px 16px",borderTop:"1px solid rgba(255,255,255,0.05)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,paddingTop:12}}>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{color:"#6a8090",fontSize:12,margin:"0 0 8px",lineHeight:1.6}}>{r.analysis}</p>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {r.keyFactors?.map(f=><span key={f} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:20,padding:"3px 9px",fontSize:10,color:"#5a7080"}}>📌 {f}</span>)}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10,flexShrink:0}}>
+            <Ring value={r.winProb} label="WIN PROB" color="#00ff9d"/>
+            <Ring value={r.confidence} label="CONFIDENCE" color="#3b9eff"/>
+          </div>
+        </div>
+
+        <p style={{color:"#334455",fontSize:10,fontWeight:700,letterSpacing:1,margin:"14px 0 8px"}}>AI PREDICTIONS</p>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {r.predictions?.map((p,i)=><PCard key={i} market={`${p.market}: ${p.prediction}`} prob={p.prob} risk={p.risk} best={p.best}/>)}
+        </div>
+
+        <div style={{display:"flex",gap:8,marginTop:12}}>
+          <button onClick={()=>onAdd(r)} style={{flex:1,background:`${pcolor}12`,border:`1px solid ${pcolor}33`,borderRadius:10,padding:"10px",cursor:"pointer",color:pcolor,fontWeight:700,fontSize:12}}>
+            🔗 Accumulator এ যোগ করুন
+          </button>
+          <button onClick={()=>onSelect(r)} style={{flex:1,background:selected?"rgba(0,255,157,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${selected?"rgba(0,255,157,0.3)":"rgba(255,255,255,0.1)"}`,borderRadius:10,padding:"10px",cursor:"pointer",color:selected?"#00ff9d":"#8899aa",fontWeight:700,fontSize:12}}>
+            {selected?"✓ Selected":"☆ Select"}
+          </button>
+        </div>
+      </div>}
     </div>
-    <p style={{color:"#445566",fontSize:11,fontWeight:700,letterSpacing:1.1}}>AI PREDICTIONS</p>
-    <div style={{display:"flex",flexDirection:"column",gap:7}}>
-      {r.predictions?.map((p,i)=><PCard key={i} market={`${p.market}: ${p.prediction}`} prob={p.prob} risk={p.risk} best={p.best}/>)}
-    </div>
-    <button onClick={onAdd} style={{background:`${pcolor}12`,border:`1px solid ${pcolor}33`,borderRadius:12,padding:"12px",cursor:"pointer",color:pcolor,fontWeight:700,fontSize:13}}>
-      🔗 Best Pick → Accumulator এ যোগ করুন
-    </button>
-  </div>;
+  );
 }
 
-// ── Key Setup Screen ─────────────────────────────────────────────
+/* ── KEY SETUP SCREEN ────────────────────────────────────────────── */
 function KeyScreen({onSave}){
   const [pid,setPid]=useState("groq");
   const [key,setKey]=useState("");
+  const [vKey,setVKey]=useState("");
   const [show,setShow]=useState(false);
   const [err,setErr]=useState("");
   const prov=PROVIDERS.find(p=>p.id===pid);
 
   const go=()=>{
-    if(!key.trim()){setErr("Key দিন।");return;}
-    saveCfg({pid,key:key.trim()});
-    onSave({pid,key:key.trim()});
+    if(!key.trim()){setErr("API Key দিন।");return;}
+    const cfg={pid,key:key.trim()};
+    if(pid==="groq"&&vKey.trim()) cfg.visionKey=vKey.trim();
+    saveCfg(cfg);onSave(cfg);
   };
 
   return(
     <div style={{minHeight:"100vh",background:"#080c14",display:"flex",alignItems:"center",justifyContent:"center",padding:16,position:"relative"}}>
       <div style={GRID}/>
       <div style={{width:"100%",maxWidth:430,position:"relative",zIndex:1}}>
-
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{width:60,height:60,borderRadius:16,background:"linear-gradient(135deg,#00ff9d12,#00ff9d28)",border:"1px solid #00ff9d33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 12px"}}>⚡</div>
-          <h1 style={{fontSize:25,fontWeight:900,color:"#fff",margin:"0 0 5px"}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></h1>
-          <p style={{color:"#445566",fontSize:13}}>AI-Powered Sports Prediction</p>
+        <div style={{textAlign:"center",marginBottom:22}}>
+          <div style={{width:58,height:58,borderRadius:15,background:"linear-gradient(135deg,#00ff9d12,#00ff9d28)",border:"1px solid #00ff9d33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 11px"}}>⚡</div>
+          <h1 style={{fontSize:24,fontWeight:900,color:"#fff",margin:"0 0 5px"}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></h1>
+          <p style={{color:"#445566",fontSize:12}}>AI-Powered Sports Prediction</p>
         </div>
-
-        <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:20,padding:22}}>
-
-          <p style={{color:"#c8d8e8",fontWeight:700,fontSize:14,margin:"0 0 12px"}}>⚡ AI Provider বেছে নিন</p>
-
-          {/* Provider cards */}
-          <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:18}}>
+        <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:18,padding:20}}>
+          <p style={{color:"#c8d8e8",fontWeight:700,fontSize:13,margin:"0 0 11px"}}>⚡ AI Provider বেছে নিন</p>
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
             {PROVIDERS.map(p=>(
               <div key={p.id} onClick={()=>{setPid(p.id);setKey("");setErr("");}}
-                style={{display:"flex",alignItems:"center",gap:10,padding:"11px 13px",borderRadius:11,border:`1.5px solid ${pid===p.id?p.color+"77":"rgba(255,255,255,0.06)"}`,background:pid===p.id?`${p.color}0e`:"rgba(255,255,255,0.015)",cursor:"pointer",transition:"all .15s"}}>
-                <div style={{width:34,height:34,borderRadius:9,background:`${p.color}18`,border:`1px solid ${p.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
-                  {p.icon}
-                </div>
+                style={{display:"flex",alignItems:"center",gap:9,padding:"10px 12px",borderRadius:10,border:`1.5px solid ${pid===p.id?p.color+"77":"rgba(255,255,255,0.06)"}`,background:pid===p.id?`${p.color}0e`:"rgba(255,255,255,0.01)",cursor:"pointer"}}>
+                <div style={{width:32,height:32,borderRadius:8,background:`${p.color}18`,border:`1px solid ${p.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{p.icon}</div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:1}}>
-                    <span style={{color:pid===p.id?p.color:"#c8d8e8",fontWeight:700,fontSize:13}}>{p.name}</span>
-                    <span style={{background:`${p.badgeColor}18`,color:p.badgeColor,fontSize:9,fontWeight:800,padding:"1px 7px",borderRadius:20,border:`1px solid ${p.badgeColor}33`}}>{p.badge}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:1}}>
+                    <span style={{color:pid===p.id?p.color:"#c8d8e8",fontWeight:700,fontSize:12}}>{p.name}</span>
+                    <span style={{background:`${p.badgeColor}18`,color:p.badgeColor,fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:20}}>{p.badge}</span>
                   </div>
-                  <p style={{color:"#445566",fontSize:11,margin:0}}>{p.note}</p>
+                  <p style={{color:"#334455",fontSize:10,margin:0}}>{p.note}</p>
                 </div>
-                <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${pid===p.id?p.color:"#2a3a44"}`,background:pid===p.id?p.color:"transparent",flexShrink:0,transition:"all .15s"}}/>
+                <div style={{width:15,height:15,borderRadius:"50%",border:`2px solid ${pid===p.id?p.color:"#2a3a44"}`,background:pid===p.id?p.color:"transparent",flexShrink:0}}/>
               </div>
             ))}
           </div>
 
-          {/* Key input */}
-          <p style={{color:"#667788",fontSize:11,fontWeight:700,margin:"0 0 7px",letterSpacing:0.5}}>{prov.name} API KEY:</p>
-          <div style={{position:"relative",marginBottom:err?"9px":"13px"}}>
-            <input
-              type={show?"text":"password"}
-              placeholder={prov.placeholder}
-              value={key}
-              onChange={e=>setKey(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{width:"100%",background:"rgba(255,255,255,0.04)",border:`1px solid ${prov.color}2a`,borderRadius:10,padding:"12px 44px 12px 13px",color:"#e0e6f0",fontSize:13,outline:"none"}}
-            />
-            <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,lineHeight:1}}>
-              {show?"🙈":"👁️"}
-            </button>
+          <p style={{color:"#556070",fontSize:11,fontWeight:700,margin:"0 0 6px"}}>{prov.name} API KEY:</p>
+          <div style={{position:"relative",marginBottom:pid==="groq"?10:err?"8px":"12px"}}>
+            <input type={show?"text":"password"} placeholder={prov.placeholder} value={key} onChange={e=>setKey(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}
+              style={{width:"100%",background:"rgba(255,255,255,0.04)",border:`1px solid ${prov.color}2a`,borderRadius:9,padding:"11px 42px 11px 12px",color:"#e0e6f0",fontSize:12,outline:"none"}}/>
+            <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15}}>{show?"🙈":"👁️"}</button>
           </div>
 
-          {err&&<p style={{color:"#ff6b6b",fontSize:12,margin:"0 0 10px"}}>⚠️ {err}</p>}
+          {/* Gemini Vision Key for Groq users */}
+          {pid==="groq"&&(
+            <div style={{background:"rgba(0,255,157,0.04)",border:"1px solid rgba(0,255,157,0.12)",borderRadius:9,padding:"10px 12px",marginBottom:err?"8px":"12px"}}>
+              <p style={{color:"#00ff9d",fontSize:11,fontWeight:700,margin:"0 0 6px"}}>📸 Screenshot বিশ্লেষণের জন্য Gemini Vision Key (optional):</p>
+              <p style={{color:"#445566",fontSize:11,margin:"0 0 7px"}}>aistudio.google.com থেকে ফ্রি key নিন (AIzaSy...)</p>
+              <input type="password" placeholder="AIzaSy... (optional)" value={vKey} onChange={e=>setVKey(e.target.value)}
+                style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(0,255,157,0.2)",borderRadius:8,padding:"9px 12px",color:"#e0e6f0",fontSize:12,outline:"none"}}/>
+            </div>
+          )}
 
-          <button onClick={go} style={{width:"100%",background:`linear-gradient(135deg,${prov.color},${prov.color}bb)`,border:"none",borderRadius:11,padding:"13px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:14,boxShadow:`0 3px 20px ${prov.color}33`,marginBottom:16}}>
+          {err&&<p style={{color:"#ff6b6b",fontSize:11,margin:"0 0 9px"}}>⚠️ {err}</p>}
+          <button onClick={go} style={{width:"100%",background:`linear-gradient(135deg,${prov.color},${prov.color}bb)`,border:"none",borderRadius:10,padding:"12px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:13,boxShadow:`0 3px 18px ${prov.color}33`,marginBottom:14}}>
             ✅ শুরু করুন
           </button>
-
-          {/* Steps */}
-          <div style={{background:`${prov.color}0a`,border:`1px solid ${prov.color}1a`,borderRadius:11,padding:"12px 14px"}}>
-            <p style={{color:prov.color,fontSize:11,fontWeight:800,margin:"0 0 8px",letterSpacing:0.5}}>📋 KEY কিভাবে পাবেন:</p>
+          <div style={{background:`${prov.color}0a`,border:`1px solid ${prov.color}18`,borderRadius:9,padding:"11px 13px"}}>
+            <p style={{color:prov.color,fontSize:11,fontWeight:800,margin:"0 0 7px"}}>📋 KEY কিভাবে পাবেন:</p>
             {prov.steps.map((s,i)=>(
-              <div key={i} style={{display:"flex",gap:8,marginBottom:i<prov.steps.length-1?5:0}}>
-                <span style={{color:prov.color,fontSize:11,fontWeight:800,flexShrink:0,minWidth:14}}>{i+1}.</span>
-                <span style={{color:"#556070",fontSize:12,lineHeight:1.5}}>{s}</span>
+              <div key={i} style={{display:"flex",gap:7,marginBottom:i<prov.steps.length-1?4:0}}>
+                <span style={{color:prov.color,fontSize:10,fontWeight:800,flexShrink:0}}>{i+1}.</span>
+                <span style={{color:"#445566",fontSize:11,lineHeight:1.5}}>{s}</span>
               </div>
             ))}
           </div>
-          <p style={{color:"#1a2a34",fontSize:11,textAlign:"center",marginTop:12}}>🔒 Key শুধু আপনার browser এ save হয়</p>
+          <p style={{color:"#1a2a34",fontSize:10,textAlign:"center",marginTop:10}}>🔒 Key শুধু browser এ save হয়</p>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Main App ─────────────────────────────────────────────────────
+/* ── MAIN APP ────────────────────────────────────────────────────── */
 function App(){
   const [cfg,setCfg]=useState(()=>getCfg());
   const [tab,setTab]=useState("upload");
@@ -375,243 +376,320 @@ function App(){
   const [mime,setMime]=useState("image/png");
   const [drag,setDrag]=useState(false);
   const [loading,setLoading]=useState(false);
-  const [result,setResult]=useState(null);
+  const [loadMsg,setLoadMsg]=useState("");
+  const [results,setResults]=useState([]); // array of match results
+  const [manualResult,setManualResult]=useState(null);
   const [accum,setAccum]=useState([]);
+  const [selected,setSelected]=useState([]);
   const [error,setError]=useState(null);
   const fileRef=useRef();
 
   if(!cfg) return <KeyScreen onSave={setCfg}/>;
-
   const prov=PROVIDERS.find(p=>p.id===cfg.pid)||PROVIDERS[0];
 
   const processFile=async(f)=>{
     if(!f||!f.type.startsWith("image/")){setError("JPG বা PNG ফাইল দিন।");return;}
-    setMime(f.type);setPreview(URL.createObjectURL(f));setResult(null);setError(null);
+    setMime(f.type);setPreview(URL.createObjectURL(f));setResults([]);setError(null);
     try{setB64(await fileToBase64(f));}catch{setError("ফাইল পড়া যায়নি।");}
   };
 
-  const analyze=async(manual=false)=>{
-    setLoading(true);setError(null);setResult(null);
+  const analyzeScreenshot=async()=>{
+    if(!b64){setError("আগে স্ক্রিনশট আপলোড করুন।");return;}
+
+    // Decide which key to use for vision
+    const visionKey = cfg.pid==="groq"
+      ? (cfg.visionKey||null)
+      : cfg.pid==="gemini"?cfg.key:null;
+
+    if(cfg.pid==="groq"&&!cfg.visionKey){
+      setError("Groq এ screenshot দেখার ক্ষমতা নেই। Gemini Vision Key যোগ করুন অথবা Manual tab ব্যবহার করুন।");
+      return;
+    }
+    if(!visionKey&&cfg.pid!=="openai"&&cfg.pid!=="anthropic"){
+      setError("Screenshot বিশ্লেষণের জন্য Gemini বা OpenAI key লাগবে।");
+      return;
+    }
+
+    setLoading(true);setError(null);setResults([]);
+
     try{
-      let res;
-      if(manual){
-        if(!teamA||!teamB){setError("দুটো টিমের নাম দিন।");setLoading(false);return;}
-        res=await callAI(cfg.pid,cfg.key,null,null,{teamA,teamB,sport,league,markets:sm.length?sm:MARKETS[sport].slice(0,5)});
+      // Step 1: Extract all matches from screenshot
+      setLoadMsg("📸 Screenshot থেকে সব ম্যাচ খুঁজে বের করছি...");
+      let matches;
+      if(cfg.pid==="openai"){
+        // OpenAI can do vision directly
+        const prompt = `Look at this betting app screenshot. Extract ALL visible matches/games.
+Respond ONLY as JSON array (no markdown):
+[{"teamA":"<n>","teamB":"<n>","sport":"<Football|Cricket|Basketball|Tennis|Hockey>","league":"<l>","markets":["<m1>"],"rawOdds":"<all odds text>"}]`;
+        const resp = await fetch("https://api.openai.com/v1/chat/completions",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":`Bearer ${cfg.key}`},
+          body:JSON.stringify({model:"gpt-4o",max_tokens:1500,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})
+        });
+        const data=await resp.json();
+        if(data.error)throw new Error(data.error.message);
+        matches=pja(data.choices?.[0]?.message?.content||"");
+      } else if(cfg.pid==="anthropic"){
+        const prompt = `Look at this betting app screenshot. Extract ALL visible matches/games.
+Respond ONLY as JSON array (no markdown):
+[{"teamA":"<n>","teamB":"<n>","sport":"<Football|Cricket|Basketball|Tennis|Hockey>","league":"<l>","markets":["<m1>"],"rawOdds":"<all odds text>"}]`;
+        const resp = await fetch("https://api.anthropic.com/v1/messages",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","x-api-key":cfg.key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1500,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime,data:b64}},{type:"text",text:prompt}]}]})
+        });
+        const data=await resp.json();
+        if(data.error)throw new Error(data.error.message);
+        matches=pja(data.content.map(b=>b.text||"").join(""));
       } else {
-        if(!b64){setError("আগে স্ক্রিনশট আপলোড করুন।");setLoading(false);return;}
-        res=await callAI(cfg.pid,cfg.key,b64,mime,null);
+        // Gemini vision (for gemini provider or groq+gemini vision key)
+        const gKey = cfg.pid==="gemini"?cfg.key:cfg.visionKey;
+        matches = await extractMatchesFromImage(gKey, b64, mime);
       }
-      setResult(res);
+
+      if(!matches||matches.length===0){
+        setError("স্ক্রিনশটে কোনো ম্যাচ খুঁজে পাওয়া যায়নি।");
+        setLoading(false);return;
+      }
+
+      // Step 2: Get predictions for each match
+      const allResults=[];
+      for(let i=0;i<matches.length;i++){
+        setLoadMsg(`🤖 ${i+1}/${matches.length}: ${matches[i].teamA} vs ${matches[i].teamB} বিশ্লেষণ করছি...`);
+        try{
+          const pred = await getPredictionsForMatch(cfg.pid,cfg.key,matches[i]);
+          allResults.push(pred);
+        }catch(e){
+          allResults.push({...matches[i],error:e.message,predictions:[],winProb:50,confidence:50,analysis:"বিশ্লেষণ ব্যর্থ হয়েছে।"});
+        }
+      }
+      setResults(allResults);
     }catch(e){
       const m=(e.message||"").toLowerCase();
-      if(m.includes("credit")||m.includes("billing")||m.includes("quota")||m.includes("exceeded")||m.includes("limit")||m.includes("insufficient")){
-        setError(`${prov.name} এর limit/credit শেষ। নিচে "Provider পরিবর্তন করুন" চাপুন।`);
-      } else if(m.includes("401")||m.includes("403")||m.includes("invalid")||m.includes("auth")||m.includes("key")){
-        setError("API Key ভুল। নতুন key দিন।");
-      } else {
-        setError("Error: "+e.message);
-      }
+      if(m.includes("credit")||m.includes("billing")||m.includes("quota")||m.includes("exceeded")||m.includes("limit")){
+        setError(`${prov.name} এর limit শেষ। "পরিবর্তন" চাপুন।`);
+      } else if(m.includes("401")||m.includes("403")||m.includes("invalid")||m.includes("auth")){
+        setError("API Key ভুল।");
+      } else {setError("Error: "+e.message);}
     }
+    setLoading(false);setLoadMsg("");
+  };
+
+  const analyzeManual=async()=>{
+    if(!teamA||!teamB){setError("দুটো টিমের নাম দিন।");return;}
+    setLoading(true);setError(null);setManualResult(null);
+    try{
+      const res=await getManualPrediction(cfg.pid,cfg.key,{teamA,teamB,sport,league,markets:sm.length?sm:MARKETS[sport].slice(0,5)});
+      setManualResult(res);
+    }catch(e){setError("Error: "+e.message);}
     setLoading(false);
   };
 
-  const reset=()=>{clearCfg();setCfg(null);setResult(null);setError(null);};
-  const toggleM=m=>setSm(s=>s.includes(m)?s.filter(x=>x!==m):[...s,m]);
-  const addAccum=()=>{
-    if(!result)return;
-    const best=result.predictions?.find(p=>p.best)||result.predictions?.[0];
+  const addToAccum=(r)=>{
+    const best=r.predictions?.find(p=>p.best)||r.predictions?.[0];
     if(!best)return;
-    setAccum(a=>[...a,{match:`${result.teamA} vs ${result.teamB}`,market:`${best.market}: ${best.prediction}`,prob:best.prob,id:Date.now()}]);
+    setAccum(a=>[...a,{match:`${r.teamA} vs ${r.teamB}`,market:`${best.market}: ${best.prediction}`,prob:best.prob,id:Date.now()}]);
   };
+  const toggleSelect=(r)=>{
+    const key=`${r.teamA}-${r.teamB}`;
+    setSelected(s=>s.includes(key)?s.filter(x=>x!==key):[...s,key]);
+  };
+  const isSelected=(r)=>selected.includes(`${r.teamA}-${r.teamB}`);
+  const reset=()=>{clearCfg();setCfg(null);setResults([]);setError(null);};
+  const toggleM=m=>setSm(s=>s.includes(m)?s.filter(x=>x!==m):[...s,m]);
   const ap=accum.length?Math.round(accum.reduce((p,c)=>p*(c.prob/100),1)*100):0;
 
-  const INP={background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"12px 13px",color:"#e0e6f0",fontSize:14,outline:"none",width:"100%"};
-  const BP=(d)=>({background:d?`${prov.color}15`:`linear-gradient(135deg,${prov.color},${prov.color}bb)`,border:"none",borderRadius:11,padding:"13px",cursor:d?"not-allowed":"pointer",color:d?"#445566":"#fff",fontWeight:900,fontSize:14,width:"100%",opacity:d?0.6:1,boxShadow:d?"none":`0 3px 20px ${prov.color}33`,transition:"all .2s"});
+  const INP={background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"11px 12px",color:"#e0e6f0",fontSize:13,outline:"none",width:"100%"};
+  const BP=(d)=>({background:d?`${prov.color}15`:`linear-gradient(135deg,${prov.color},${prov.color}bb)`,border:"none",borderRadius:10,padding:"13px",cursor:d?"not-allowed":"pointer",color:d?"#445566":"#fff",fontWeight:900,fontSize:13,width:"100%",opacity:d?0.6:1,boxShadow:d?"none":`0 3px 18px ${prov.color}33`});
 
   return(
     <div style={{minHeight:"100vh",background:"#080c14",position:"relative"}}>
       <div style={GRID}/>
-      <div style={{position:"relative",zIndex:1,maxWidth:840,margin:"0 auto",padding:"16px 13px 40px"}}>
+      <div style={{position:"relative",zIndex:1,maxWidth:840,margin:"0 auto",padding:"14px 12px 40px"}}>
 
         {/* Header */}
-        <div style={{textAlign:"center",marginBottom:18}}>
-          <div style={{display:"inline-flex",alignItems:"center",gap:9,marginBottom:5}}>
-            <div style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#00ff9d12,#00ff9d28)",border:"1px solid #00ff9d33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}}>⚡</div>
-            <span style={{fontSize:22,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></span>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:8,marginBottom:5}}>
+            <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#00ff9d12,#00ff9d28)",border:"1px solid #00ff9d33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚡</div>
+            <span style={{fontSize:21,fontWeight:900,color:"#fff"}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></span>
           </div>
-          <p style={{color:"#334455",fontSize:11,marginBottom:7}}>AI Sports Prediction · Screenshot Analysis · Multi-Bet</p>
-          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:`${prov.color}0d`,border:`1px solid ${prov.color}2a`,borderRadius:20,padding:"4px 13px"}}>
-            <span style={{fontSize:13}}>{prov.icon}</span>
+          <p style={{color:"#2a3a44",fontSize:11,marginBottom:6}}>AI Sports Prediction · All Matches · Multi-Bet</p>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${prov.color}0d`,border:`1px solid ${prov.color}2a`,borderRadius:20,padding:"4px 12px"}}>
+            <span>{prov.icon}</span>
             <span style={{color:prov.color,fontSize:11,fontWeight:700}}>{prov.name}</span>
-            <span style={{background:`${prov.badgeColor}18`,color:prov.badgeColor,fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:20}}>{prov.badge}</span>
-            <button onClick={reset} style={{background:"none",border:"none",color:"#334455",cursor:"pointer",fontSize:10,textDecoration:"underline",padding:0}}>পরিবর্তন</button>
+            <span style={{background:`${prov.badgeColor}18`,color:prov.badgeColor,fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:20}}>{prov.badge}</span>
+            <button onClick={reset} style={{background:"none",border:"none",color:"#2a3a44",cursor:"pointer",fontSize:10,textDecoration:"underline",padding:0}}>পরিবর্তন</button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div style={{display:"flex",gap:3,background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:12,padding:3,marginBottom:18}}>
+        <div style={{display:"flex",gap:3,background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:11,padding:3,marginBottom:16}}>
           {[{id:"upload",label:"📸 Screenshot"},{id:"manual",label:"✏️ Manual"},{id:"accumulator",label:`🔗 Accum${accum.length?` (${accum.length})`:""}`},{id:"admin",label:"⚙️ Admin"}].map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"8px 3px",borderRadius:9,border:"none",cursor:"pointer",background:tab===t.id?`${prov.color}18`:"transparent",color:tab===t.id?prov.color:"#445566",fontWeight:tab===t.id?700:500,fontSize:11,borderBottom:tab===t.id?`2px solid ${prov.color}`:"2px solid transparent",transition:"all .15s"}}>
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"8px 3px",borderRadius:9,border:"none",cursor:"pointer",background:tab===t.id?`${prov.color}18`:"transparent",color:tab===t.id?prov.color:"#445566",fontWeight:tab===t.id?700:500,fontSize:11,borderBottom:tab===t.id?`2px solid ${prov.color}`:"2px solid transparent"}}>
               {t.label}
             </button>
           ))}
         </div>
 
-        {/* SCREENSHOT */}
+        {/* ── SCREENSHOT TAB ── */}
         {tab==="upload"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:13}}>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <div
-              onClick={()=>fileRef.current?.click()}
+              onClick={()=>!loading&&fileRef.current?.click()}
               onDrop={e=>{e.preventDefault();setDrag(false);processFile(e.dataTransfer.files[0]);}}
               onDragOver={e=>{e.preventDefault();setDrag(true);}}
               onDragLeave={()=>setDrag(false)}
-              style={{border:`2px dashed ${drag?prov.color:preview?prov.color+"44":"rgba(255,255,255,0.08)"}`,borderRadius:15,padding:"36px 18px",textAlign:"center",cursor:"pointer",background:drag?`${prov.color}07`:preview?`${prov.color}03`:"rgba(255,255,255,0.01)",transition:"all .2s"}}
-            >
+              style={{border:`2px dashed ${drag?prov.color:preview?prov.color+"44":"rgba(255,255,255,0.08)"}`,borderRadius:14,padding:"30px 18px",textAlign:"center",cursor:"pointer",background:drag?`${prov.color}07`:preview?`${prov.color}03`:"rgba(255,255,255,0.01)"}}>
               <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>processFile(e.target.files[0])}/>
               {preview
                 ?<div>
-                  <img src={preview} style={{maxHeight:200,maxWidth:"100%",borderRadius:9,marginBottom:10,border:`1px solid ${prov.color}2a`,objectFit:"contain"}}/>
+                  <img src={preview} style={{maxHeight:180,maxWidth:"100%",borderRadius:8,marginBottom:9,border:`1px solid ${prov.color}2a`,objectFit:"contain"}}/>
                   <p style={{color:prov.color,fontSize:13,fontWeight:700}}>✓ Screenshot ready</p>
                   <p style={{color:"#2a3a44",fontSize:11,marginTop:3}}>অন্য ছবি দিতে ক্লিক করুন</p>
                 </div>
                 :<div>
-                  <div style={{fontSize:46,marginBottom:10}}>📸</div>
-                  <p style={{color:"#c8d8e8",fontWeight:700,fontSize:14,marginBottom:5}}>বেটিং অ্যাপের স্ক্রিনশট আপলোড করুন</p>
-                  <p style={{color:"#334455",fontSize:12}}>ক্লিক করুন · বা drag করুন</p>
-                  {cfg.pid==="groq"&&<p style={{color:"#2a4a3a",fontSize:11,marginTop:6}}>⚠️ Groq এ screenshot analysis নেই — Manual tab ব্যবহার করুন</p>}
+                  <div style={{fontSize:44,marginBottom:9}}>📸</div>
+                  <p style={{color:"#c8d8e8",fontWeight:700,fontSize:14,marginBottom:4}}>বেটিং অ্যাপের স্ক্রিনশট আপলোড করুন</p>
+                  <p style={{color:"#334455",fontSize:12}}>সব ম্যাচ স্বয়ংক্রিয়ভাবে বিশ্লেষণ হবে</p>
                 </div>
               }
             </div>
-            {preview&&<button onClick={()=>analyze(false)} disabled={loading} style={BP(loading)}>{loading?`⏳ ${prov.name} বিশ্লেষণ করছে...`:`⚡ Screenshot বিশ্লেষণ করুন`}</button>}
+
+            {preview&&(
+              <button onClick={analyzeScreenshot} disabled={loading} style={BP(loading)}>
+                {loading?loadMsg||"⏳ বিশ্লেষণ করছি...":`⚡ সব ম্যাচ বিশ্লেষণ করুন`}
+              </button>
+            )}
+
             {error&&(
-              <div style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.2)",borderRadius:10,padding:"12px 14px",color:"#ff7070",fontSize:13,lineHeight:1.6}}>
+              <div style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.2)",borderRadius:9,padding:"11px 13px",color:"#ff7070",fontSize:12,lineHeight:1.6}}>
                 ⚠️ {error}
-                <button onClick={reset} style={{display:"block",marginTop:8,background:"rgba(255,77,77,0.1)",border:"1px solid rgba(255,77,77,0.25)",color:"#ff7070",borderRadius:8,padding:"6px 13px",cursor:"pointer",fontSize:12,fontWeight:600}}>🔄 অন্য Provider দিন</button>
+                <button onClick={reset} style={{display:"block",marginTop:7,background:"rgba(255,77,77,0.1)",border:"1px solid rgba(255,77,77,0.22)",color:"#ff7070",borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>🔄 অন্য Provider দিন</button>
               </div>
             )}
-            {result&&<ResultView r={result} onAdd={addAccum} pcolor={prov.color}/>}
+
+            {results.length>0&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 4px"}}>
+                  <p style={{color:"#00ff9d",fontSize:12,fontWeight:700}}>✅ {results.length}টি ম্যাচ পাওয়া গেছে</p>
+                  <button onClick={()=>results.forEach(r=>addToAccum(r))} style={{background:"rgba(0,255,157,0.08)",border:"1px solid rgba(0,255,157,0.2)",borderRadius:8,padding:"5px 12px",cursor:"pointer",color:"#00ff9d",fontWeight:700,fontSize:11}}>
+                    সব → Accumulator
+                  </button>
+                </div>
+                {results.map((r,i)=>(
+                  <MatchResultCard key={i} r={r} idx={i} onAdd={addToAccum} pcolor={prov.color} onSelect={toggleSelect} selected={isSelected(r)}/>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* MANUAL */}
+        {/* ── MANUAL TAB ── */}
         {tab==="manual"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            {cfg.pid==="groq"&&(
-              <div style={{background:"rgba(0,255,157,0.04)",border:"1px solid rgba(0,255,157,0.15)",borderRadius:10,padding:"10px 13px"}}>
-                <p style={{color:"#00ff9d",fontSize:12,fontWeight:700}}>✅ Groq Manual Mode — সম্পূর্ণ ফ্রি ও দ্রুত!</p>
-              </div>
-            )}
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:11}}>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
               {SPORTS.map(s=>(
-                <button key={s.id} onClick={()=>{setSport(s.id);setSm([]);}} style={{padding:"7px 13px",borderRadius:30,border:`1px solid ${sport===s.id?prov.color:"rgba(255,255,255,0.08)"}`,background:sport===s.id?`${prov.color}15`:"rgba(255,255,255,0.02)",color:sport===s.id?prov.color:"#667788",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                <button key={s.id} onClick={()=>{setSport(s.id);setSm([]);}} style={{padding:"7px 12px",borderRadius:30,border:`1px solid ${sport===s.id?prov.color:"rgba(255,255,255,0.08)"}`,background:sport===s.id?`${prov.color}15`:"rgba(255,255,255,0.02)",color:sport===s.id?prov.color:"#667788",cursor:"pointer",fontSize:12,fontWeight:600}}>
                   {s.icon} {s.label}
                 </button>
               ))}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <input placeholder="Team A" value={teamA} onChange={e=>setTeamA(e.target.value)} style={INP}/>
               <input placeholder="Team B" value={teamB} onChange={e=>setTeamB(e.target.value)} style={INP}/>
             </div>
             <input placeholder="League / Tournament (optional)" value={league} onChange={e=>setLeague(e.target.value)} style={INP}/>
             <div>
-              <p style={{color:"#334455",fontSize:10,fontWeight:700,letterSpacing:1,marginBottom:7}}>MARKETS সিলেক্ট করুন</p>
+              <p style={{color:"#2a3a44",fontSize:10,fontWeight:700,letterSpacing:1,marginBottom:6}}>MARKETS সিলেক্ট করুন</p>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 {MARKETS[sport].map(m=>(
-                  <button key={m} onClick={()=>toggleM(m)} style={{padding:"5px 11px",borderRadius:20,border:`1px solid ${sm.includes(m)?prov.color:"rgba(255,255,255,0.07)"}`,background:sm.includes(m)?`${prov.color}12`:"rgba(255,255,255,0.015)",color:sm.includes(m)?prov.color:"#445566",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                  <button key={m} onClick={()=>toggleM(m)} style={{padding:"5px 10px",borderRadius:20,border:`1px solid ${sm.includes(m)?prov.color:"rgba(255,255,255,0.07)"}`,background:sm.includes(m)?`${prov.color}12`:"rgba(255,255,255,0.015)",color:sm.includes(m)?prov.color:"#445566",cursor:"pointer",fontSize:11,fontWeight:600}}>
                     {m}
                   </button>
                 ))}
               </div>
             </div>
-            <button onClick={()=>analyze(true)} disabled={loading} style={BP(loading)}>
-              {loading?`⏳ ${prov.name} prediction তৈরি করছে...`:"🎯 AI Prediction নিন"}
+            <button onClick={analyzeManual} disabled={loading} style={BP(loading)}>
+              {loading?"⏳ Prediction তৈরি করছি...":"🎯 AI Prediction নিন"}
             </button>
-            {error&&<div style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.2)",borderRadius:10,padding:"12px 14px",color:"#ff7070",fontSize:13}}>⚠️ {error}</div>}
-            {result&&<ResultView r={result} onAdd={addAccum} pcolor={prov.color}/>}
+            {error&&<div style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.2)",borderRadius:9,padding:"11px 13px",color:"#ff7070",fontSize:12}}>⚠️ {error}</div>}
+            {manualResult&&<MatchResultCard r={manualResult} idx={0} onAdd={addToAccum} pcolor={prov.color} onSelect={()=>{}} selected={false}/>}
           </div>
         )}
 
-        {/* ACCUMULATOR */}
+        {/* ── ACCUMULATOR TAB ── */}
         {tab==="accumulator"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:13}}>
-            <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:15,padding:18}}>
-              <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:15,color:"#c8d8e8"}}>🔗 Multi-Bet Accumulator</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <h3 style={{fontWeight:800,fontSize:14,color:"#c8d8e8"}}>🔗 Multi-Bet Accumulator</h3>
+                {accum.length>0&&<button onClick={()=>setAccum([])} style={{background:"rgba(255,77,77,0.08)",border:"1px solid rgba(255,77,77,0.18)",color:"#ff6060",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:11}}>সব মুছুন</button>}
+              </div>
               {accum.length===0
-                ?<p style={{color:"#334455",textAlign:"center",padding:"28px 0",fontSize:13}}>কোনো bet নেই। ম্যাচ বিশ্লেষণ করে যোগ করুন।</p>
-                :<div style={{display:"flex",flexDirection:"column",gap:7}}>
+                ?<p style={{color:"#2a3a44",textAlign:"center",padding:"24px 0",fontSize:12}}>কোনো bet নেই। ম্যাচ বিশ্লেষণ করে যোগ করুন।</p>
+                :<div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {accum.map(a=>(
-                    <div key={a.id} style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.02)",borderRadius:8,padding:"9px 12px",border:"1px solid rgba(255,255,255,0.05)"}}>
-                      <div style={{flex:1,minWidth:0,marginRight:10}}>
+                    <div key={a.id} style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.02)",borderRadius:8,padding:"8px 11px",border:"1px solid rgba(255,255,255,0.05)"}}>
+                      <div style={{flex:1,minWidth:0,marginRight:9}}>
                         <div style={{color:"#c8d8e8",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.match}</div>
-                        <div style={{color:"#445566",fontSize:11,marginTop:1}}>{a.market}</div>
+                        <div style={{color:"#334455",fontSize:10,marginTop:1}}>{a.market}</div>
                       </div>
-                      <span style={{color:"#00ff9d",fontWeight:900,fontSize:15,fontFamily:"monospace",marginRight:8}}>{a.prob}%</span>
-                      <button onClick={()=>setAccum(s=>s.filter(x=>x.id!==a.id))} style={{background:"rgba(255,77,77,0.08)",border:"1px solid rgba(255,77,77,0.18)",color:"#ff6060",borderRadius:6,padding:"2px 9px",cursor:"pointer",fontSize:11}}>✕</button>
+                      <span style={{color:"#00ff9d",fontWeight:900,fontSize:14,fontFamily:"monospace",marginRight:7}}>{a.prob}%</span>
+                      <button onClick={()=>setAccum(s=>s.filter(x=>x.id!==a.id))} style={{background:"rgba(255,77,77,0.08)",border:"1px solid rgba(255,77,77,0.18)",color:"#ff6060",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontSize:10}}>✕</button>
                     </div>
                   ))}
                 </div>
               }
             </div>
             {accum.length>0&&(
-              <div style={{background:ap<30?"rgba(255,77,77,0.04)":"rgba(0,255,157,0.03)",border:`1px solid ${ap<30?"rgba(255,77,77,0.15)":"rgba(0,255,157,0.12)"}`,borderRadius:15,padding:18}}>
-                <p style={{color:"#445566",fontSize:10,fontWeight:700,margin:"0 0 4px",letterSpacing:1}}>COMBINED PROBABILITY</p>
-                <div style={{fontSize:40,fontWeight:900,color:ap<30?"#ff5555":"#00ff9d",fontFamily:"monospace",marginBottom:5}}>{ap}%</div>
-                <p style={{color:"#445566",fontSize:11,marginBottom:12}}>{accum.length} selections · Risk: <b style={{color:ap<25?"#ff5555":ap<50?"#ffc107":"#00ff9d"}}>{ap<25?"Very High":ap<50?"High":"Medium"}</b></p>
+              <div style={{background:ap<30?"rgba(255,77,77,0.04)":"rgba(0,255,157,0.03)",border:`1px solid ${ap<30?"rgba(255,77,77,0.15)":"rgba(0,255,157,0.12)"}`,borderRadius:14,padding:16}}>
+                <p style={{color:"#334455",fontSize:10,fontWeight:700,margin:"0 0 4px",letterSpacing:1}}>COMBINED PROBABILITY</p>
+                <div style={{fontSize:38,fontWeight:900,color:ap<30?"#ff5555":"#00ff9d",fontFamily:"monospace",marginBottom:4}}>{ap}%</div>
+                <p style={{color:"#334455",fontSize:11,marginBottom:10}}>{accum.length} selections · Risk: <b style={{color:ap<25?"#ff5555":ap<50?"#ffc107":"#00ff9d"}}>{ap<25?"Very High":ap<50?"High":"Medium"}</b></p>
                 <ProbBar v={ap} c={ap<30?"#ff4d4d":"#00ff9d"}/>
-                {ap<30&&<div style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.15)",borderRadius:9,padding:"10px 13px",marginTop:12}}>
-                  <p style={{color:"#ff5555",fontSize:12,fontWeight:700,marginBottom:3}}>⚠️ HIGH RISK</p>
-                  <p style={{color:"rgba(255,85,85,0.65)",fontSize:11,lineHeight:1.5}}>Multi-bet এ risk অনেক বেড়ে যায়। সাবধানে সিদ্ধান্ত নিন।</p>
+                {ap<30&&<div style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.15)",borderRadius:8,padding:"9px 12px",marginTop:10}}>
+                  <p style={{color:"#ff5555",fontSize:11,fontWeight:700}}>⚠️ Multi-bet এ risk অনেক বেড়ে যায়। সাবধানে সিদ্ধান্ত নিন।</p>
                 </div>}
               </div>
             )}
           </div>
         )}
 
-        {/* ADMIN */}
+        {/* ── ADMIN TAB ── */}
         {tab==="admin"&&(
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
             {[
               {l:"AI Provider",v:prov.name,i:prov.icon},
               {l:"Status",v:prov.badge,i:"✅"},
-              {l:"Sports",v:"5 Types",i:"🏆"},
+              {l:"Vision",v:cfg.pid==="groq"?(cfg.visionKey?"Gemini+Groq":"Text Only"):cfg.pid==="gemini"?"Gemini":"Vision AI",i:"📸"},
               {l:"Markets",v:"30+",i:"📊"},
-              {l:"Screenshot",v:cfg.pid==="groq"?"Text Only":"Vision AI",i:"📸"},
-              {l:"Multi-Bet",v:"Active",i:"🔗"},
+              {l:"Sports",v:"5 Types",i:"🏆"},
+              {l:"Multi-Match",v:"Active",i:"🎯"},
             ].map(c=>(
-              <div key={c.l} style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:13,padding:14}}>
-                <div style={{fontSize:20,marginBottom:6}}>{c.i}</div>
-                <p style={{color:"#334455",fontSize:10,fontWeight:700,margin:"0 0 2px",letterSpacing:0.7}}>{c.l.toUpperCase()}</p>
-                <p style={{color:prov.color,fontSize:15,fontWeight:900,fontFamily:"monospace"}}>{c.v}</p>
+              <div key={c.l} style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:12,padding:13}}>
+                <div style={{fontSize:19,marginBottom:5}}>{c.i}</div>
+                <p style={{color:"#2a3a44",fontSize:9,fontWeight:700,margin:"0 0 2px",letterSpacing:0.7}}>{c.l.toUpperCase()}</p>
+                <p style={{color:prov.color,fontSize:14,fontWeight:900,fontFamily:"monospace"}}>{c.v}</p>
               </div>
             ))}
-            <div style={{gridColumn:"1/-1",background:`${prov.color}08`,border:`1px solid ${prov.color}18`,borderRadius:13,padding:16}}>
-              <p style={{color:prov.color,fontWeight:700,fontSize:13,marginBottom:10}}>🔄 Provider পরিবর্তন করুন</p>
-              <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
-                {PROVIDERS.map(p=>(
-                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:5,background:cfg.pid===p.id?`${p.color}18`:"rgba(255,255,255,0.025)",border:`1px solid ${cfg.pid===p.id?p.color+"44":"rgba(255,255,255,0.07)"}`,borderRadius:9,padding:"6px 11px"}}>
-                    <span style={{fontSize:12}}>{p.icon}</span>
-                    <span style={{color:cfg.pid===p.id?p.color:"#667788",fontSize:11,fontWeight:600}}>{p.name}</span>
-                    {cfg.pid===p.id&&<span style={{color:p.color,fontSize:9,fontWeight:800}}>✓</span>}
-                  </div>
-                ))}
-              </div>
-              <button onClick={reset} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,padding:"9px 16px",cursor:"pointer",color:"#c8d8e8",fontWeight:700,fontSize:12}}>
+            <div style={{gridColumn:"1/-1",background:`${prov.color}08`,border:`1px solid ${prov.color}18`,borderRadius:12,padding:14}}>
+              <p style={{color:prov.color,fontWeight:700,fontSize:12,marginBottom:9}}>🔄 Provider পরিবর্তন করুন</p>
+              <button onClick={reset} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:"8px 14px",cursor:"pointer",color:"#c8d8e8",fontWeight:700,fontSize:11}}>
                 🔄 অন্য Provider / Key দিন
               </button>
             </div>
-            <div style={{gridColumn:"1/-1",background:"rgba(255,193,7,0.03)",border:"1px solid rgba(255,193,7,0.15)",borderRadius:13,padding:14}}>
-              <p style={{color:"#ffc107",fontWeight:700,marginBottom:4,fontSize:13}}>⚠️ Responsible Gambling</p>
-              <p style={{color:"rgba(255,193,7,0.5)",fontSize:12,lineHeight:1.6}}>এই সিস্টেম probability analysis দেয়। কোনো result guaranteed নয়। সাবধানে বাজি ধরুন।</p>
+            <div style={{gridColumn:"1/-1",background:"rgba(255,193,7,0.03)",border:"1px solid rgba(255,193,7,0.13)",borderRadius:12,padding:13}}>
+              <p style={{color:"#ffc107",fontWeight:700,marginBottom:3,fontSize:12}}>⚠️ Responsible Gambling</p>
+              <p style={{color:"rgba(255,193,7,0.45)",fontSize:11,lineHeight:1.5}}>এই সিস্টেম probability analysis দেয়। কোনো result guaranteed নয়।</p>
             </div>
           </div>
         )}
 
-        <p style={{textAlign:"center",marginTop:32,color:"#1a2a34",fontSize:10}}>PredictIQ · AI Sports Analysis · শুধু বিনোদন ও গবেষণার জন্য</p>
+        <p style={{textAlign:"center",marginTop:28,color:"#1a2a34",fontSize:10}}>PredictIQ · AI Sports Analysis · শুধু বিনোদন ও গবেষণার জন্য</p>
       </div>
     </div>
   );
 }
-
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
