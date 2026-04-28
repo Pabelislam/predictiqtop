@@ -112,7 +112,7 @@ async function callGemini(apiKey, imageBase64, mediaType, manualData){
     ? [{text: prompt},{inline_data:{mime_type: mediaType||"image/png", data: imageBase64}}]
     : [{text: prompt}];
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
   const resp = await fetch(url,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
