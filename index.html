@@ -38,7 +38,7 @@ const PROVIDERS=[
 const SPORTS=[{id:"football",icon:"⚽",label:"Football"},{id:"cricket",icon:"🏏",label:"Cricket"},{id:"basketball",icon:"🏀",label:"Basketball"},{id:"tennis",icon:"🎾",label:"Tennis"},{id:"hockey",icon:"🏑",label:"Hockey"}];
 const MARKETS={football:["1X2","Double Chance","Over/Under Goals","BTTS","Asian Handicap","Euro Handicap","Correct Score","HT/FT","Corners","Cards","First Goal"],cricket:["Match Winner","Toss Winner","Total Runs","Top Batsman","Top Bowler","Wickets","Extra Runs"],basketball:["Match Winner","Point Spread","Total Points","Quarter Bet"],tennis:["Match Winner","Set Betting","Total Games","Handicap"],hockey:["Match Winner","Total Goals","Handicap"]};
 const SLIP_MARKETS=["1X2 Home Win","1X2 Draw","1X2 Away Win","Double Chance 1X","Double Chance X2","Over 1.5","Over 2.5","Over 3.5","Under 1.5","Under 2.5","BTTS Yes","BTTS No","Asian HC -0.5","Asian HC +0.5","Correct Score","HT/FT","Match Winner"];
-const FDLEAGUES=[{id:"PL",name:"Premier League",flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},{id:"PD",name:"La Liga",flag:"🇪🇸"},{id:"BL1",name:"Bundesliga",flag:"🇩🇪"},{id:"SA",name:"Serie A",flag:"🇮🇹"},{id:"FL1",name:"Ligue 1",flag:"🇫🇷"},{id:"CL",name:"Champions League",flag:"🌍"},{id:"PPL",name:"Primeira Liga",flag:"🇵🇹"},{id:"DED",name:"Eredivisie",flag:"🇳🇱"},{id:"BSA",name:"Brasileirão",flag:"🇧🇷"}];
+
 const RC={Low:"#00ff9d",Medium:"#ffc107",High:"#ff4d4d"};
 const VC={"Safe to Play":"#00ff9d","Risky but Possible":"#ffc107","Very Risky - Reconsider":"#ff4d4d"};
 
@@ -46,8 +46,70 @@ const VC={"Safe to Play":"#00ff9d","Risky but Possible":"#ffc107","Very Risky - 
 function getCfg(){try{const s=localStorage.getItem("piq7");return s?JSON.parse(s):null;}catch{return null;}}
 function saveCfg(c){try{localStorage.setItem("piq7",JSON.stringify(c));}catch{}}
 function clearCfg(){try{localStorage.removeItem("piq7");}catch{}}
-function getFdKey(){try{return localStorage.getItem("fd7")||"1b40ac75c0494064a532dfeb86d36627";}catch{return "1b40ac75c0494064a532dfeb86d36627";}}
-function saveFdKey(k){try{localStorage.setItem("fd7",k);}catch{}}
+
+// ── History Storage ──
+const HIST_KEY="piq_hist_v1";
+function getHistory(){try{const s=localStorage.getItem(HIST_KEY);return s?JSON.parse(s):[];}catch{return[];}}
+function saveHistory(h){try{localStorage.setItem(HIST_KEY,JSON.stringify(h.slice(0,500)));}catch{}}
+function addPrediction(r){
+  const h=getHistory();
+  const best=r.predictions?.find(p=>p.best)||r.predictions?.[0];
+  if(!best)return;
+  const entry={
+    id:"p_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
+    match:`${r.teamA} vs ${r.teamB}`,
+    teamA:r.teamA,teamB:r.teamB,
+    league:r.league||"Unknown",
+    sport:r.sport||"Football",
+    market:best.market,
+    prediction:best.prediction,
+    prob:best.prob,
+    confidence:r.confidence||70,
+    riskLevel:r.riskLevel||"Medium",
+    analysis:r.analysis||"",
+    time:Date.now(),
+    result:null,// null=pending, true=win, false=loss
+  };
+  h.unshift(entry);
+  saveHistory(h);
+  return entry;
+}
+function updateResult(id,won){
+  const h=getHistory();
+  const idx=h.findIndex(x=>x.id===id);
+  if(idx>=0){h[idx].result=won;saveHistory(h);}
+}
+function calcStats(h){
+  const settled=h.filter(x=>x.result!==null);
+  const wins=settled.filter(x=>x.result===true).length;
+  const total=h.length;
+  const acc=settled.length?Math.round((wins/settled.length)*100):0;
+  // by market
+  const mStats={};
+  settled.forEach(x=>{
+    if(!mStats[x.market])mStats[x.market]={w:0,t:0};
+    mStats[x.market].t++;
+    if(x.result)mStats[x.market].w++;
+  });
+  // by confidence
+  const cStats={High:{w:0,t:0},Medium:{w:0,t:0},Low:{w:0,t:0}};
+  settled.forEach(x=>{
+    const c=x.confidence>=80?"High":x.confidence>=60?"Medium":"Low";
+    cStats[c].t++;
+    if(x.result)cStats[c].w++;
+  });
+  // by time
+  const now=Date.now();
+  const day=settled.filter(x=>now-x.time<86400000);
+  const week=settled.filter(x=>now-x.time<604800000);
+  const month=settled.filter(x=>now-x.time<2592000000);
+  return{total,settled:settled.length,wins,acc,mStats,cStats,
+    daily:day.length?Math.round((day.filter(x=>x.result).length/day.length)*100):null,
+    weekly:week.length?Math.round((week.filter(x=>x.result).length/week.length)*100):null,
+    monthly:month.length?Math.round((month.filter(x=>x.result).length/month.length)*100):null,
+  };
+}
+
 
 // Utils
 function oddsToProb(o){const n=parseFloat(o);if(!n||n<=1)return 50;return Math.round((1/n)*1000)/10;}
@@ -94,97 +156,9 @@ async function predSlip(pid,key,matches){
   return pj(txt);
 }
 
-// BD timezone helpers
-function toBDDateStr(offsetDays=0){
-  const d=new Date(Date.now()+(6*3600000)+(offsetDays*86400000));
-  return d.toISOString().split("T")[0];
-}
-function fmtTimeBD(utcStr){
-  const d=new Date(new Date(utcStr).getTime()+(6*3600000));
-  const h=d.getUTCHours(),m=d.getUTCMinutes();
-  return `${h%12||12}:${String(m).padStart(2,"0")} ${h>=12?"PM":"AM"}`;
-}
-function fmtDateBD(utcStr){
-  const d=new Date(new Date(utcStr).getTime()+(6*3600000));
-  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${days[d.getUTCDay()]}, ${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
-}
-function isTodayBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(0);}
-function isTomorrowBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(1);}
 
-async function fetchFD(fdKey,league,from,to){
-  const parse=(d)=>(d.matches||[]).map(m=>({id:m.id,home:m.homeTeam?.shortName||m.homeTeam?.name||"Home",away:m.awayTeam?.shortName||m.awayTeam?.name||"Away",league:m.competition?.name||league,date:m.utcDate,status:m.status,matchday:m.matchday,homeScore:m.score?.fullTime?.home,awayScore:m.score?.fullTime?.away}));
-  const sig=()=>AbortSignal.timeout(14000);
-  const BASE="https://api.football-data.org/v4/competitions";
-  const path=`${league}/matches?dateFrom=${from}&dateTo=${to}`;
-  const fullUrl=`${BASE}/${path}`;
-  const enc=encodeURIComponent(fullUrl);
 
-  // Helper: parse response safely
-  async function tryParse(r){
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    const d=await r.json();
-    if(d.errorCode===403)throw new Error("BAD_KEY");
-    if(d.errorCode===429)throw new Error("RATE_LIMIT");
-    if(d.matches!==undefined)return parse(d);
-    throw new Error("NO_MATCHES");
-  }
 
-  const attempts=[
-    // 1) worker.bridged.cc — সবচেয়ে reliable CORS proxy
-    async()=>tryParse(await fetch(`https://worker.bridged.cc/${fullUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
-
-    // 2) api.codetabs.com
-    async()=>{
-      const r=await fetch(`https://api.codetabs.com/v1/proxy?quest=${enc}`,{signal:sig()});
-      if(!r.ok)throw new Error("codetabs "+r.status);
-      // codetabs returns raw response
-      const t=await r.text();
-      const d=JSON.parse(t);
-      if(d.errorCode===403)throw new Error("BAD_KEY");
-      if(d.matches!==undefined)return parse(d);
-      throw new Error("NO_MATCHES");
-    },
-
-    // 3) corsproxy.io — header সহ
-    async()=>tryParse(await fetch(`https://corsproxy.io/?url=${enc}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
-
-    // 4) allorigins — token embed করে URL এ
-    async()=>{
-      const tokenUrl=encodeURIComponent(`${fullUrl}&X-Auth-Token=${fdKey}`);
-      const r=await fetch(`https://api.allorigins.win/get?url=${tokenUrl}`,{signal:sig()});
-      if(!r.ok)throw new Error("allorigins "+r.status);
-      const w=await r.json();
-      if(!w.contents)throw new Error("allorigins empty");
-      const d=JSON.parse(w.contents);
-      if(d.errorCode===403)throw new Error("BAD_KEY");
-      if(d.matches!==undefined)return parse(d);
-      throw new Error("NO_MATCHES");
-    },
-
-    // 5) htmldriven cors proxy
-    async()=>tryParse(await fetch(`https://cors.eu.org/${fullUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
-
-    // 6) 8x8.vc open proxy
-    async()=>tryParse(await fetch(`https://cors.8x8.vc/${fullUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
-
-    // 7) direct (কিছু network এ কাজ করে)
-    async()=>tryParse(await fetch(fullUrl,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
-  ];
-
-  for(const fn of attempts){
-    try{
-      const result=await fn();
-      if(result)return result;
-    }catch(e){
-      if(e.message==="BAD_KEY")throw new Error("API key সঠিক নয়। Football-Data.org চেক করুন।");
-      if(e.message==="RATE_LIMIT")throw new Error("অনেক বেশি request। কিছুক্ষণ অপেক্ষা করুন।");
-      // অন্য error হলে পরের proxy try করো
-    }
-  }
-  throw new Error("ডেটা লোড হচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।");
-}
 
 // ── Shared UI ──
 function Bar({v,c,h=7}){return <div style={{background:"rgba(255,255,255,0.05)",borderRadius:5,height:h,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(v,100)}%`,background:`linear-gradient(90deg,${c}44,${c})`,boxShadow:`0 0 8px ${c}44`,transition:"width 1.4s ease",borderRadius:5}}/></div>;}
@@ -266,19 +240,74 @@ function MCard({r,idx,onAdd,pc}){
 }
 
 // ── Fixtures Tab ──
-function FixTab({cfg,onPick}){
-  const [fdk,setFdk]=useState(getFdKey);
-  const [inp,setInp]=useState("");
-  const [showIn,setShowIn]=useState(!getFdKey());
-  const [lg,setLg]=useState("PL");
-  const [dtF,setDtF]=useState("all");
-  const [q,setQ]=useState("");
-  const [ms,setMs]=useState([]);
-  const [load,setLoad]=useState(false);
-  const [er,setEr]=useState(null);
-  const [lu,setLu]=useState(null);
 
-  const loadMs=useCallback(async(l,k)=>{
+
+// ── BD Timezone Helpers ──
+function toBDDateStr(offsetDays=0){
+  const d=new Date(Date.now()+(6*3600000)+(offsetDays*86400000));
+  return d.toISOString().split("T")[0];
+}
+function fmtTimeBD(utcStr){
+  const d=new Date(new Date(utcStr).getTime()+(6*3600000));
+  const h=d.getUTCHours(),m=d.getUTCMinutes();
+  return `${h%12||12}:${String(m).padStart(2,"0")} ${h>=12?"PM":"AM"}`;
+}
+function fmtDateBD(utcStr){
+  const d=new Date(new Date(utcStr).getTime()+(6*3600000));
+  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${days[d.getUTCDay()]}, ${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+function isTodayBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(0);}
+function isTomorrowBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(1);}
+
+// ── Football Data Fetch (5 proxy fallback) ──
+async function fetchFD(fdKey,league,from,to){
+  const parse=(d)=>(d.matches||[]).map(m=>({id:m.id,home:m.homeTeam?.shortName||m.homeTeam?.name||"Home",away:m.awayTeam?.shortName||m.awayTeam?.name||"Away",league:m.competition?.name||league,date:m.utcDate,status:m.status,matchday:m.matchday,homeScore:m.score?.fullTime?.home,awayScore:m.score?.fullTime?.away}));
+  const apiUrl=`https://api.football-data.org/v4/competitions/${league}/matches?dateFrom=${from}&dateTo=${to}`;
+  const sig=()=>AbortSignal.timeout(10000);
+  const proxies=[
+    async()=>{const r=await fetch(`https://cors.eu.org/${apiUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error(`cors.eu ${r.status}`);const d=await r.json();if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const urlK=apiUrl+"&apikey="+fdKey;const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlK)}`,{signal:sig()});if(!r.ok)throw new Error("allorigins");const w=await r.json();const d=JSON.parse(w.contents);if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const r=await fetch(`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error(`corsproxy ${r.status}`);const d=await r.json();if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const r=await fetch(`https://thingproxy.freeboard.io/fetch/${apiUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error("thingproxy");const d=await r.json();if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const r=await fetch(apiUrl,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok){const e=await r.json();throw new Error(e.message||`HTTP ${r.status}`);}return r.json();},
+  ];
+  let lastErr="unknown";
+  for(const fn of proxies){try{const d=await fn();if(d.matches!==undefined)return parse(d);}catch(e){lastErr=e.message;}}
+  throw new Error(`Fixtures লোড ব্যর্থ: ${lastErr}`);
+}
+
+const FD_KEY="fdkey";
+const getFdKey=()=>localStorage.getItem(FD_KEY)||"";
+const saveFdKey=(k)=>localStorage.setItem(FD_KEY,k);
+
+const FDLEAGUES=[
+  {id:"PL",name:"Premier League",flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},
+  {id:"PD",name:"La Liga",flag:"🇪🇸"},
+  {id:"BL1",name:"Bundesliga",flag:"🇩🇪"},
+  {id:"SA",name:"Serie A",flag:"🇮🇹"},
+  {id:"FL1",name:"Ligue 1",flag:"🇫🇷"},
+  {id:"CL",name:"Champions League",flag:"🌍"},
+  {id:"PPL",name:"Primeira Liga",flag:"🇵🇹"},
+  {id:"DED",name:"Eredivisie",flag:"🇳🇱"},
+  {id:"BSA",name:"Brasileirão",flag:"🇧🇷"},
+];
+
+// ── Fixtures Tab ──
+function FixTab({cfg,onPick}){
+  const [fdk,setFdk]=React.useState(getFdKey);
+  const [inp,setInp]=React.useState("");
+  const [showIn,setShowIn]=React.useState(!getFdKey());
+  const [lg,setLg]=React.useState("PL");
+  const [dtF,setDtF]=React.useState("all");
+  const [q,setQ]=React.useState("");
+  const [ms,setMs]=React.useState([]);
+  const [load,setLoad]=React.useState(false);
+  const [er,setEr]=React.useState(null);
+  const [lu,setLu]=React.useState(null);
+
+  const loadMs=React.useCallback(async(l,k)=>{
     if(!k)return;
     setLoad(true);setEr(null);
     try{
@@ -290,139 +319,418 @@ function FixTab({cfg,onPick}){
     setLoad(false);
   },[]);
 
-  useEffect(()=>{if(fdk)loadMs(lg,fdk);},[lg,fdk]);
-  useEffect(()=>{if(!fdk)return;const t=setInterval(()=>loadMs(lg,fdk),5*60000);return()=>clearInterval(t);},[lg,fdk]);
+  React.useEffect(()=>{if(fdk)loadMs(lg,fdk);},[lg,fdk]);
 
-  const saveFd=()=>{if(!inp.trim())return;saveFdKey(inp.trim());setFdk(inp.trim());setShowIn(false);setInp("");};
+  const saveKey=()=>{
+    const k=inp.trim();
+    if(!k)return;
+    saveFdKey(k);setFdk(k);setInp("");setShowIn(false);
+    loadMs(lg,k);
+  };
 
   const filtered=ms.filter(m=>{
-    if(q){const qq=q.toLowerCase();if(!m.home.toLowerCase().includes(qq)&&!m.away.toLowerCase().includes(qq))return false;}
+    if(q&&!m.home.toLowerCase().includes(q.toLowerCase())&&!m.away.toLowerCase().includes(q.toLowerCase()))return false;
     if(dtF==="today"&&!isTodayBD(m.date))return false;
     if(dtF==="tomorrow"&&!isTomorrowBD(m.date))return false;
     return true;
   });
 
-  const grouped={};
-  filtered.forEach(m=>{const d=new Date(m.date).toDateString();if(!grouped[d])grouped[d]=[];grouped[d].push(m);});
+  const grouped=filtered.reduce((a,m)=>{
+    const k=m.date.split("T")[0];
+    if(!a[k])a[k]=[];a[k].push(m);return a;
+  },{});
 
-  const liveCount=ms.filter(m=>["IN_PLAY","LIVE","HT","PAUSED"].includes(m.status)).length;
+  const liveCount=ms.filter(m=>m.status==="IN_PLAY"||m.status==="PAUSED").length;
 
-  const INP2={background:"rgba(255,255,255,0.04)",border:"1px solid rgba(59,158,255,0.2)",borderRadius:8,padding:"10px 11px",color:"#e0e6f0",fontSize:12,outline:"none",width:"100%"};
+  const pv=cfg;
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:13}}>
-      {/* Hero */}
-      <div style={{background:"linear-gradient(135deg,rgba(59,158,255,0.07),rgba(0,255,157,0.03))",border:"1px solid rgba(59,158,255,0.13)",borderRadius:16,padding:"16px 17px"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:11}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,rgba(59,158,255,0.1),rgba(0,255,157,0.04))",border:"1px solid rgba(59,158,255,0.2)",borderRadius:18,padding:"15px 14px"}}>
         <div style={{display:"flex",alignItems:"center",gap:13,marginBottom:9}}>
           <div style={{width:48,height:48,borderRadius:14,background:"rgba(59,158,255,0.12)",border:"1px solid rgba(59,158,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>📅</div>
-          <div><div style={{display:"flex",alignItems:"center",gap:9}}><h2 style={{color:"#fff",fontSize:19,fontWeight:900,margin:0}}>Live <span style={{color:"#3b9eff"}}>Fixtures</span></h2>{liveCount>0&&<span style={{background:"rgba(255,77,77,0.13)",color:"#ff4d4d",fontSize:10,fontWeight:900,padding:"3px 9px",borderRadius:20,border:"1px solid rgba(255,77,77,0.25)",animation:"lp 2s infinite"}}>🔴 {liveCount} LIVE</span>}</div><p style={{color:"#334455",fontSize:12,margin:0}}>Upcoming · Live · Auto Refresh</p></div>
+          <div><div style={{display:"flex",alignItems:"center",gap:9}}><h2 style={{color:"#fff",fontSize:19,fontWeight:900,margin:0}}>Live <span style={{color:"#3b9eff"}}>Fixtures</span></h2>{liveCount>0&&<span style={{background:"rgba(255,77,77,0.13)",color:"#ff4d4d",fontSize:10,fontWeight:900,padding:"3px 9px",borderRadius:20,border:"1px solid rgba(255,77,77,0.25)"}}>🔴 {liveCount} LIVE</span>}</div><p style={{color:"#334455",fontSize:12,margin:0}}>Upcoming · Live · Auto Refresh</p></div>
         </div>
-        {lu&&<p style={{color:"#1a2a34",fontSize:11}}>🔄 Updated: {fmtTimeBD(lu.toISOString())} (BD)</p>}
+        {lu&&<p style={{color:"#1a2a34",fontSize:11,margin:0}}>🔄 Updated: {fmtTimeBD(lu.toISOString())} (BD)</p>}
       </div>
 
-      {/* FD Key */}
+      {/* API Key */}
       {showIn?(
-        <div style={{background:"rgba(59,158,255,0.04)",border:"1px solid rgba(59,158,255,0.13)",borderRadius:13,padding:14}}>
-          <p style={{color:"#3b9eff",fontWeight:800,fontSize:12,margin:"0 0 5px"}}>🔑 Football-Data.org API Key (ফ্রি)</p>
-          <p style={{color:"#334455",fontSize:11,margin:"0 0 10px"}}>👉 <strong style={{color:"#3b9eff"}}>football-data.org/client/register</strong> — ফ্রি sign up করুন</p>
-          <div style={{display:"flex",gap:7,marginBottom:9}}>
-            <input placeholder="Your football-data.org key..." value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveFd()} style={INP2}/>
-            <button onClick={saveFd} style={{background:"linear-gradient(135deg,#3b9eff,#1a7ae0)",border:"none",borderRadius:8,padding:"0 15px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:12,flexShrink:0}}>✅</button>
+        <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"14px"}}>
+          <p style={{color:"#c8d8e8",fontSize:13,fontWeight:700,margin:"0 0 10px"}}>🔑 Football-Data.org API Key</p>
+          <div style={{display:"flex",gap:8}}>
+            <input value={inp} onChange={e=>setInp(e.target.value)} placeholder="API key দিন..." style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"11px 12px",color:"#e0e6f0",fontSize:13,outline:"none"}} onKeyDown={e=>e.key==="Enter"&&saveKey()}/>
+            <button onClick={saveKey} style={{background:"linear-gradient(135deg,#3b9eff,#2280dd)",border:"none",borderRadius:9,padding:"11px 16px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer"}}>Save</button>
           </div>
-          <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.08)",borderRadius:8,padding:"8px 10px"}}><p style={{color:"#00ff9d",fontSize:9,fontWeight:700,margin:"0 0 4px"}}>📋 Steps:</p><p style={{color:"#2a3a44",fontSize:10,lineHeight:1.7}}>1. football-data.org এ যান → Register<br/>2. Email verify করুন<br/>3. Dashboard থেকে key copy করুন<br/>4. এখানে paste করুন</p></div>
         </div>
       ):(
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(59,158,255,0.04)",border:"1px solid rgba(59,158,255,0.1)",borderRadius:10,padding:"9px 13px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{color:"#3b9eff",fontSize:11,fontWeight:700}}>🔑 Football-Data.org সংযুক্ত</span>{load&&<Spin c="#3b9eff"/>}</div>
-          <button onClick={()=>setShowIn(true)} style={{background:"none",border:"none",color:"#2a3a44",cursor:"pointer",fontSize:10,textDecoration:"underline"}}>পরিবর্তন</button>
+        <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.1)",borderRadius:12,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:"#00ff9d",fontSize:12,fontWeight:700}}>🔑 Football-Data.org সংযুক্ত</span>
+          <button onClick={()=>setShowIn(true)} style={{background:"none",border:"none",color:"#334455",fontSize:11,cursor:"pointer",textDecoration:"underline"}}>পরিবর্তন</button>
         </div>
       )}
 
-      {fdk&&<>
-        {/* League Tabs */}
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {FDLEAGUES.map(l=><button key={l.id} onClick={()=>setLg(l.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 13px",borderRadius:22,border:`1px solid ${lg===l.id?"rgba(59,158,255,0.5)":"rgba(255,255,255,0.05)"}`,background:lg===l.id?"rgba(59,158,255,0.11)":"rgba(255,255,255,0.01)",color:lg===l.id?"#3b9eff":"#334455",cursor:"pointer",fontSize:12,fontWeight:lg===l.id?700:500}}>{l.flag} {l.name}</button>)}
-        </div>
-        {/* Filters */}
-        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-          <input placeholder="🔍 Search team..." value={q} onChange={e=>setQ(e.target.value)} style={{flex:1,minWidth:130,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"11px 13px",color:"#e0e6f0",fontSize:13,outline:"none"}}/>
-          {["all","today","tomorrow"].map(f=><button key={f} onClick={()=>setDtF(f)} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${dtF===f?"rgba(59,158,255,0.4)":"rgba(255,255,255,0.05)"}`,background:dtF===f?"rgba(59,158,255,0.1)":"rgba(255,255,255,0.01)",color:dtF===f?"#3b9eff":"#334455",cursor:"pointer",fontSize:12,fontWeight:dtF===f?700:500}}>{f==="all"?"All":f==="today"?"Today":"Tomorrow"}</button>)}
-          <button onClick={()=>loadMs(lg,fdk)} disabled={load} style={{padding:"9px 14px",borderRadius:10,border:"1px solid rgba(59,158,255,0.2)",background:"rgba(59,158,255,0.07)",color:"#3b9eff",cursor:load?"not-allowed":"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>{load?<Spin c="#3b9eff"/>:"🔄"}</button>
-        </div>
-      </>}
-
-      <Err msg={er}/>
-
-      {/* Stats */}
-      {ms.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
-        {[{l:"Total",v:ms.length,c:"#3b9eff"},{l:"Live",v:ms.filter(m=>["IN_PLAY","LIVE","HT","PAUSED"].includes(m.status)).length,c:"#ff4d4d"},{l:"Upcoming",v:ms.filter(m=>["TIMED","SCHEDULED","NS"].includes(m.status)).length,c:"#00ff9d"},{l:"Finished",v:ms.filter(m=>["FINISHED","FT"].includes(m.status)).length,c:"#445566"}].map(s=><div key={s.l} style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.03)",borderRadius:10,padding:"9px",textAlign:"center"}}><div style={{color:s.c,fontSize:19,fontWeight:900,fontFamily:"monospace"}}>{s.v}</div><div style={{color:"#1a2a34",fontSize:8,fontWeight:700,letterSpacing:0.5}}>{s.l.toUpperCase()}</div></div>)}
-      </div>}
-
-      {/* Match groups */}
-      {fdk&&!load&&Object.keys(grouped).length===0&&!er&&(
-  <div style={{textAlign:"center",padding:"40px 20px"}}>
-    <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:14,background:"rgba(59,158,255,0.04)",border:"1px solid rgba(59,158,255,0.1)",borderRadius:20,padding:"32px 36px"}}>
-      <div style={{fontSize:52}}>🏟️</div>
-      <div>
-        <p style={{color:"#c8d8e8",fontSize:15,fontWeight:800,margin:"0 0 6px"}}>কোনো Match পাওয়া যায়নি</p>
-        <p style={{color:"#2a3a44",fontSize:12,lineHeight:1.7,margin:0}}>এই লিগে এখন কোনো upcoming match নেই।<br/>অন্য একটি League বেছে নিন।</p>
-      </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
-        {["🏴󠁧󠁢󠁥󠁮󠁧󠁿 PL","🇪🇸 La Liga","🌍 UCL"].map(l=>(
-          <span key={l} style={{background:"rgba(59,158,255,0.08)",border:"1px solid rgba(59,158,255,0.18)",borderRadius:20,padding:"5px 13px",color:"#3b9eff",fontSize:11,fontWeight:700}}>{l}</span>
+      {/* League Tabs */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {FDLEAGUES.map(l=>(
+          <button key={l.id} onClick={()=>setLg(l.id)} style={{padding:"7px 13px",borderRadius:22,border:`1px solid ${lg===l.id?"rgba(59,158,255,0.5)":"rgba(255,255,255,0.05)"}`,background:lg===l.id?"rgba(59,158,255,0.11)":"rgba(255,255,255,0.01)",color:lg===l.id?"#3b9eff":"#334455",cursor:"pointer",fontSize:12,fontWeight:lg===l.id?700:500}}>{l.flag} {l.name}</button>
         ))}
       </div>
-    </div>
-  </div>
-)}
 
-      {Object.entries(grouped).map(([ds,dms])=>(
-        <div key={ds}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <div style={{height:1,flex:1,background:"rgba(255,255,255,0.03)"}}/>
-            <span style={{background:isTodayBD(dms[0].date)?"rgba(0,255,157,0.07)":isTomorrowBD(dms[0].date)?"rgba(255,193,7,0.07)":"rgba(255,255,255,0.03)",color:isTodayBD(dms[0].date)?"#00ff9d":isTomorrowBD(dms[0].date)?"#ffc107":"#445566",fontSize:9,fontWeight:800,padding:"3px 11px",borderRadius:20,border:`1px solid ${isTodayBD(dms[0].date)?"rgba(0,255,157,0.18)":isTomorrowBD(dms[0].date)?"rgba(255,193,7,0.18)":"rgba(255,255,255,0.05)"}`,whiteSpace:"nowrap"}}>
-              {isTodayBD(dms[0].date)?"📅 Today":isTomorrowBD(dms[0].date)?"📅 Tomorrow":fmtDateBD(dms[0].date)}
-            </span>
-            <div style={{height:1,flex:1,background:"rgba(255,255,255,0.03)"}}/>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:7}}>
-            {dms.map(m=>{
-              const st=matchSt(m);
-              return(
-                <div key={m.id} style={{background:st.live?"rgba(255,77,77,0.03)":"rgba(255,255,255,0.018)",border:`1px solid ${st.live?"rgba(255,77,77,0.13)":"rgba(255,255,255,0.04)"}`,borderRadius:12,padding:"12px 13px",position:"relative",overflow:"hidden"}}>
-                  {st.live&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#ff4d4d,transparent)"}}/>}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:9}}>
-                    <div style={{flex:1,minWidth:0}}>
+      {/* Filters */}
+      <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+        <input placeholder="🔍 Search team..." value={q} onChange={e=>setQ(e.target.value)} style={{flex:1,minWidth:130,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"11px 13px",color:"#e0e6f0",fontSize:13,outline:"none"}}/>
+        {["all","today","tomorrow"].map(f=>(
+          <button key={f} onClick={()=>setDtF(f)} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${dtF===f?"rgba(59,158,255,0.4)":"rgba(255,255,255,0.05)"}`,background:dtF===f?"rgba(59,158,255,0.1)":"rgba(255,255,255,0.01)",color:dtF===f?"#3b9eff":"#334455",cursor:"pointer",fontSize:12,fontWeight:dtF===f?700:500}}>
+            {f==="all"?"All":f==="today"?"Today":"Tomorrow"}
+          </button>
+        ))}
+        <button onClick={()=>loadMs(lg,fdk)} disabled={load} style={{padding:"9px 14px",borderRadius:10,border:"1px solid rgba(59,158,255,0.2)",background:"rgba(59,158,255,0.07)",color:"#3b9eff",cursor:load?"not-allowed":"pointer",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+          {load?<div style={{width:16,height:16,border:"2px solid #3b9eff33",borderTopColor:"#3b9eff",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>:"🔄"}
+        </button>
+      </div>
+
+      {/* Error */}
+      {er&&<div style={{background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.18)",borderRadius:12,padding:"13px 15px",color:"#ff7070",fontSize:13}}>⚠️ {er}</div>}
+
+      {/* Loading */}
+      {load&&<div style={{textAlign:"center",padding:"32px",color:"#334455",fontSize:13}}>⏳ লোড হচ্ছে...</div>}
+
+      {/* Match groups */}
+      {!load&&Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).map(([date,dms])=>{
+        const isToday=isTodayBD(dms[0].date);
+        const isTom=isTomorrowBD(dms[0].date);
+        const col=isToday?"#00ff9d":isTom?"#ffc107":"#3b9eff";
+        return(
+          <div key={date}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:7,background:`${col}10`,border:`1px solid ${col}25`,borderRadius:20,padding:"5px 13px",marginBottom:8}}>
+              <span style={{color:col,fontSize:11,fontWeight:800}}>{isToday?"📅 Today":isTom?"📅 Tomorrow":fmtDateBD(dms[0].date)}</span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {dms.map(m=>{
+                const live=m.status==="IN_PLAY"||m.status==="PAUSED";
+                const fin=m.status==="FINISHED";
+                const hasScore=m.homeScore!=null&&m.awayScore!=null;
+                return(
+                  <div key={m.id} style={{background:live?"rgba(255,77,77,0.04)":"rgba(255,255,255,0.02)",border:`1px solid ${live?"rgba(255,77,77,0.2)":"rgba(255,255,255,0.05)"}`,borderRadius:14,padding:"13px 14px",display:"flex",gap:11,alignItems:"center"}}>
+                    <div style={{flex:1}}>
                       <p style={{color:"#1a2a34",fontSize:11,fontWeight:700,margin:"0 0 6px"}}>⚽ {m.league}{m.matchday?` · MD${m.matchday}`:""}</p>
                       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:6}}>
                         <span style={{color:"#fff",fontSize:15,fontWeight:800,flex:1}}>{m.home}</span>
-                        {(m.homeScore!=null&&m.awayScore!=null)?
-                          <span style={{background:"rgba(255,255,255,0.05)",color:st.live?"#ff4d4d":"#c8d8e8",fontSize:15,fontWeight:900,fontFamily:"monospace",padding:"3px 11px",borderRadius:8,flexShrink:0,border:`1px solid ${st.live?"rgba(255,77,77,0.18)":"rgba(255,255,255,0.06)"}`}}>{m.homeScore}–{m.awayScore}</span>:
+                        {hasScore?
+                          <span style={{background:"rgba(255,255,255,0.06)",color:live?"#ff4d4d":"#c8d8e8",fontSize:15,fontWeight:900,fontFamily:"monospace",padding:"3px 11px",borderRadius:8,flexShrink:0,border:`1px solid ${live?"rgba(255,77,77,0.2)":"rgba(255,255,255,0.07)"}`}}>{m.homeScore}–{m.awayScore}</span>:
                           <span style={{color:"#2a3a44",fontSize:13,padding:"0 6px",flexShrink:0}}>vs</span>}
                         <span style={{color:"#fff",fontSize:15,fontWeight:800,flex:1,textAlign:"right"}}>{m.away}</span>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:9}}>
-                        <span style={{color:"#2a3a44",fontSize:12}}>🕒 {fmtTimeBD(m.date)}</span>
-                        {st.live&&<span style={{width:6,height:6,borderRadius:"50%",background:"#ff4d4d",display:"inline-block",animation:"lp 1.5s infinite"}}/>}
-                        <span style={{color:st.color,fontSize:9,fontWeight:700}}>{st.label}</span>
+                        <span style={{color:"#2a3a44",fontSize:12}}>🕒 {fmtTimeBD(m.date)} (BD)</span>
+                        {live&&<span style={{background:"rgba(255,77,77,0.12)",color:"#ff4d4d",fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20}}>🔴 LIVE</span>}
+                        {fin&&<span style={{background:"rgba(100,100,100,0.12)",color:"#667788",fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20}}>FT</span>}
                       </div>
                     </div>
-                    <button onClick={()=>onPick({teamA:m.home,teamB:m.away,sport:"Football",league:m.league})}
+                    <button onClick={()=>onPick&&onPick({teamA:m.home,teamB:m.away,sport:"Football",league:m.league})}
                       style={{background:"linear-gradient(135deg,rgba(0,255,157,0.12),rgba(0,255,157,0.06))",border:"1px solid rgba(0,255,157,0.22)",borderRadius:11,padding:"10px 15px",cursor:"pointer",color:"#00ff9d",fontWeight:800,fontSize:12,flexShrink:0}}>
                       🔮 Predict
                     </button>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Empty state */}
+      {fdk&&!load&&Object.keys(grouped).length===0&&!er&&(
+        <div style={{textAlign:"center",padding:"40px 20px"}}>
+          <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:14,background:"rgba(59,158,255,0.04)",border:"1px solid rgba(59,158,255,0.1)",borderRadius:20,padding:"32px 36px"}}>
+            <div style={{fontSize:52}}>🏟️</div>
+            <div>
+              <p style={{color:"#c8d8e8",fontSize:15,fontWeight:800,margin:"0 0 6px"}}>কোনো Match পাওয়া যায়নি</p>
+              <p style={{color:"#2a3a44",fontSize:12,lineHeight:1.7,margin:0}}>এই লিগে এখন কোনো upcoming match নেই।<br/>অন্য একটি League বেছে নিন।</p>
+            </div>
           </div>
         </div>
-      ))}
+      )}
+
+      {!fdk&&(
+        <div style={{textAlign:"center",padding:"32px",color:"#334455",fontSize:13}}>🔑 API key দিন fixtures দেখতে।</div>
+      )}
     </div>
   );
 }
 
-// ── BetSlip Tab ──
+// ── History Tab ──
+function HistoryTab({pv}){
+  const [hist,setHist]=useState(()=>getHistory());
+  const [filter,setFilter]=useState("all");
+  const [view,setView]=useState("list");
+  const [markingId,setMarkingId]=useState(null);
+  const [showClear,setShowClear]=useState(false);
+
+  const refresh=()=>setHist([...getHistory()]);
+
+  const doMark=(id,won)=>{
+    updateResult(id,won);
+    setMarkingId(null);
+    refresh();
+  };
+
+  const doClear=()=>{
+    localStorage.removeItem(HIST_KEY);
+    setShowClear(false);
+    refresh();
+  };
+
+  const filtered=hist.filter(h=>{
+    if(filter==="pending"&&h.result!==null)return false;
+    if(filter==="win"&&h.result!==true)return false;
+    if(filter==="loss"&&h.result!==false)return false;
+    return true;
+  });
+
+  const stats=calcStats(hist);
+
+  const fmtTime=(ts)=>{
+    const diff=Date.now()-ts;
+    if(diff<3600000)return Math.round(diff/60000)+"m আগে";
+    if(diff<86400000)return Math.round(diff/3600000)+"h আগে";
+    return new Date(ts).toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+  };
+
+  const AC=stats.acc;
+  const acColor=AC>=70?"#00ff9d":AC>=50?"#ffc107":"#ff4d4d";
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:11}}>
+
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,rgba(139,92,246,0.13),rgba(59,130,246,0.06))",border:"1px solid rgba(139,92,246,0.22)",borderRadius:18,padding:"16px 15px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:13}}>
+          <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,rgba(139,92,246,0.35),rgba(59,130,246,0.2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:21}}>📈</div>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontSize:16,fontWeight:900}}>Prediction <span style={{color:"#a78bfa"}}>History</span></div>
+            <div style={{color:"#445566",fontSize:11,marginTop:1}}>Track · Analyze · Improve</div>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+          {[
+            {l:"Total",v:stats.total,c:"#a78bfa",icon:"🎯"},
+            {l:"Win",v:stats.wins,c:"#00ff9d",icon:"✅"},
+            {l:"Loss",v:stats.settled-stats.wins,c:"#ff4d4d",icon:"❌"},
+            {l:"Rate",v:stats.settled?AC+"%":"—",c:acColor,icon:"📊"},
+          ].map(s=>(
+            <div key={s.l} style={{background:"rgba(0,0,0,0.35)",borderRadius:10,padding:"9px 4px",textAlign:"center",border:"1px solid rgba(255,255,255,0.04)"}}>
+              <div style={{fontSize:13,marginBottom:2}}>{s.icon}</div>
+              <div style={{color:s.c,fontSize:15,fontWeight:900,fontFamily:"monospace"}}>{s.v}</div>
+              <div style={{color:"#2a3a44",fontSize:8,fontWeight:700,letterSpacing:0.5}}>{s.l.toUpperCase()}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* View toggle */}
+      <div style={{display:"flex",gap:6,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4}}>
+        {["list","stats"].map(v=>(
+          <button key={v} onClick={()=>setView(v)}
+            style={{flex:1,padding:"9px 0",borderRadius:9,border:"none",background:view===v?"rgba(139,92,246,0.18)":"transparent",color:view===v?"#a78bfa":"#445566",fontWeight:view===v?800:500,fontSize:12,cursor:"pointer",transition:"all .15s"}}>
+            {v==="list"?"📋 List":"📊 Stats"}
+          </button>
+        ))}
+      </div>
+
+      {/* STATS VIEW */}
+      {view==="stats"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {stats.settled===0?(
+            <div style={{textAlign:"center",padding:"44px 20px",background:"rgba(255,255,255,0.015)",borderRadius:16,border:"1px solid rgba(255,255,255,0.04)"}}>
+              <div style={{fontSize:42,marginBottom:11}}>📊</div>
+              <p style={{color:"#c8d8e8",fontWeight:700,fontSize:14,marginBottom:6}}>এখনো কোনো Result নেই</p>
+              <p style={{color:"#2a3a44",fontSize:11,lineHeight:1.8}}>Prediction নিন → List এ Win/Loss mark করুন → এখানে statistics আসবে</p>
+            </div>
+          ):(
+            <>
+              {/* Accuracy circle */}
+              <div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(139,92,246,0.15)",borderRadius:16,padding:"18px 15px",display:"flex",alignItems:"center",gap:15}}>
+                <div style={{position:"relative",width:88,height:88,flexShrink:0}}>
+                  <svg width={88} height={88} style={{transform:"rotate(-90deg)",position:"absolute"}}>
+                    <circle cx={44} cy={44} r={36} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={7}/>
+                    <circle cx={44} cy={44} r={36} fill="none" stroke={acColor} strokeWidth={7}
+                      strokeDasharray={`${(AC/100)*2*Math.PI*36} ${2*Math.PI*36}`}
+                      strokeLinecap="round"
+                      style={{filter:`drop-shadow(0 0 8px ${acColor}66)`,transition:"stroke-dasharray 1.2s ease"}}
+                    />
+                  </svg>
+                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <span style={{color:acColor,fontSize:17,fontWeight:900,fontFamily:"monospace"}}>{AC}%</span>
+                  </div>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{color:"#c8d8e8",fontWeight:800,fontSize:13,marginBottom:3}}>Overall Accuracy</div>
+                  <div style={{color:"#445566",fontSize:11,marginBottom:9}}>{stats.wins} correct / {stats.settled} settled</div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {stats.daily!==null&&<span style={{background:"rgba(0,255,157,0.08)",border:"1px solid rgba(0,255,157,0.2)",color:"#00ff9d",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:12}}>Today: {stats.daily}%</span>}
+                    {stats.weekly!==null&&<span style={{background:"rgba(255,193,7,0.08)",border:"1px solid rgba(255,193,7,0.2)",color:"#ffc107",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:12}}>Week: {stats.weekly}%</span>}
+                    {stats.monthly!==null&&<span style={{background:"rgba(139,92,246,0.08)",border:"1px solid rgba(139,92,246,0.2)",color:"#a78bfa",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:12}}>Month: {stats.monthly}%</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Confidence breakdown */}
+              <div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:14,padding:"13px 14px"}}>
+                <p style={{color:"#c8d8e8",fontWeight:800,fontSize:12,marginBottom:11}}>🎯 Confidence Breakdown</p>
+                {["High","Medium","Low"].map(c=>{
+                  const d=stats.cStats[c];
+                  if(!d||!d.t)return null;
+                  const a=Math.round((d.w/d.t)*100);
+                  const col=c==="High"?"#00ff9d":c==="Medium"?"#ffc107":"#ff8800";
+                  return(
+                    <div key={c} style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+                      <span style={{background:`${col}15`,color:col,fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:10,border:`1px solid ${col}30`,minWidth:48,textAlign:"center"}}>{c}</span>
+                      <div style={{flex:1,background:"rgba(255,255,255,0.05)",borderRadius:4,height:6,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${a}%`,background:`linear-gradient(90deg,${col}55,${col})`,borderRadius:4}}/>
+                      </div>
+                      <span style={{color:col,fontWeight:900,fontSize:11,fontFamily:"monospace",minWidth:34}}>{a}%</span>
+                      <span style={{color:"#2a3a44",fontSize:9}}>{d.t}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Market breakdown */}
+              {Object.keys(stats.mStats).length>0&&(
+                <div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:14,padding:"13px 14px"}}>
+                  <p style={{color:"#c8d8e8",fontWeight:800,fontSize:12,marginBottom:11}}>📊 Market Accuracy</p>
+                  {Object.entries(stats.mStats).sort((a,b)=>(b[1].w/b[1].t)-(a[1].w/a[1].t)).map(([m,d])=>{
+                    const a=Math.round((d.w/d.t)*100);
+                    const col=a>=70?"#00ff9d":a>=50?"#ffc107":"#ff4d4d";
+                    return(
+                      <div key={m} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{color:"#8899aa",fontSize:10,minWidth:95,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m}</span>
+                        <div style={{flex:1,background:"rgba(255,255,255,0.05)",borderRadius:4,height:5,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${a}%`,background:`linear-gradient(90deg,${col}55,${col})`,borderRadius:4}}/>
+                        </div>
+                        <span style={{color:col,fontWeight:800,fontSize:10,minWidth:32,textAlign:"right"}}>{a}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* LIST VIEW */}
+      {view==="list"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+
+          {/* Filter buttons */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {[
+              {k:"all",l:"🔘 All",c:"#a78bfa"},
+              {k:"pending",l:"⏳ Pending",c:"#ffc107"},
+              {k:"win",l:"✅ Win",c:"#00ff9d"},
+              {k:"loss",l:"❌ Loss",c:"#ff4d4d"},
+            ].map(f=>(
+              <button key={f.k} onClick={()=>setFilter(f.k)}
+                style={{padding:"7px 13px",borderRadius:20,border:`1px solid ${filter===f.k?f.c+"55":"rgba(255,255,255,0.06)"}`,background:filter===f.k?`${f.c}12`:"rgba(255,255,255,0.02)",color:filter===f.k?f.c:"#445566",cursor:"pointer",fontSize:11,fontWeight:700,WebkitTapHighlightColor:"transparent"}}>
+                {f.l}
+              </button>
+            ))}
+            {hist.length>0&&(
+              <button onClick={()=>setShowClear(true)}
+                style={{marginLeft:"auto",padding:"7px 11px",borderRadius:20,border:"1px solid rgba(255,77,77,0.15)",background:"rgba(255,77,77,0.05)",color:"#ff6060",cursor:"pointer",fontSize:11,fontWeight:700,WebkitTapHighlightColor:"transparent"}}>
+                🗑️
+              </button>
+            )}
+          </div>
+
+          {/* Clear confirm */}
+          {showClear&&(
+            <div style={{background:"rgba(255,77,77,0.07)",border:"1px solid rgba(255,77,77,0.2)",borderRadius:12,padding:"13px 14px"}}>
+              <p style={{color:"#ff7070",fontWeight:700,fontSize:12,marginBottom:10}}>⚠️ সব history মুছে ফেলবেন?</p>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={doClear} style={{flex:1,background:"rgba(255,77,77,0.15)",border:"1px solid rgba(255,77,77,0.3)",color:"#ff4d4d",borderRadius:9,padding:"9px 0",cursor:"pointer",fontWeight:800,fontSize:12,WebkitTapHighlightColor:"transparent"}}>হ্যাঁ, মুছুন</button>
+                <button onClick={()=>setShowClear(false)} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#8899aa",borderRadius:9,padding:"9px 0",cursor:"pointer",fontWeight:700,fontSize:12,WebkitTapHighlightColor:"transparent"}}>বাতিল</button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty */}
+          {filtered.length===0&&(
+            <div style={{textAlign:"center",padding:"44px 20px",background:"rgba(255,255,255,0.015)",borderRadius:16,border:"1px solid rgba(255,255,255,0.04)"}}>
+              <div style={{fontSize:42,marginBottom:11}}>📭</div>
+              <p style={{color:"#c8d8e8",fontWeight:700,fontSize:14,marginBottom:6}}>{hist.length===0?"কোনো Prediction নেই":"কোনো result পাওয়া যায়নি"}</p>
+              <p style={{color:"#2a3a44",fontSize:11}}>{hist.length===0?"Screenshot বা Manual ট্যাবে prediction নিন":"অন্য filter বেছে নিন"}</p>
+            </div>
+          )}
+
+          {/* Cards */}
+          {filtered.map((h)=>{
+            const conf=h.confidence>=80?"High":h.confidence>=60?"Medium":"Low";
+            const confCol=conf==="High"?"#00ff9d":conf==="Medium"?"#ffc107":"#ff8800";
+            const rCol=h.result===true?"#00ff9d":h.result===false?"#ff4d4d":"#ffc107";
+            const rLabel=h.result===true?"✅ Win":h.result===false?"❌ Loss":"⏳ Pending";
+            const isMarking=markingId===h.id;
+            return(
+              <div key={h.id} style={{background:h.result===true?"rgba(0,255,157,0.03)":h.result===false?"rgba(255,77,77,0.03)":"rgba(255,255,255,0.02)",border:`1px solid ${h.result===true?"rgba(0,255,157,0.12)":h.result===false?"rgba(255,77,77,0.12)":"rgba(255,255,255,0.06)"}`,borderRadius:14,padding:"13px 13px",position:"relative",overflow:"hidden"}}>
+                {h.result===true&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#00ff9d55,transparent)"}}/>}
+                {h.result===false&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#ff4d4d55,transparent)"}}/>}
+
+                {/* Match + result badge */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:7}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#fff",fontWeight:800,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.match}</div>
+                    <div style={{color:"#445566",fontSize:9,marginTop:2}}>{h.league} · {fmtTime(h.time)}</div>
+                  </div>
+                  <span style={{color:rCol,fontSize:10,fontWeight:800,background:`${rCol}12`,border:`1px solid ${rCol}28`,padding:"4px 9px",borderRadius:10,flexShrink:0}}>{rLabel}</span>
+                </div>
+
+                {/* Tags */}
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:h.result===null?10:0}}>
+                  <span style={{background:"rgba(139,92,246,0.12)",color:"#a78bfa",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:9,border:"1px solid rgba(139,92,246,0.22)"}}>{h.market}</span>
+                  <span style={{background:"rgba(255,255,255,0.05)",color:"#c8d8e8",fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:9}}>{h.prediction}</span>
+                  <span style={{background:`${confCol}12`,color:confCol,fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:9,border:`1px solid ${confCol}28`}}>{conf} {h.prob}%</span>
+                </div>
+
+                {/* Mark result */}
+                {h.result===null&&(
+                  isMarking?(
+                    <div style={{display:"flex",gap:7}}>
+                      <button onTouchEnd={(e)=>{e.preventDefault();doMark(h.id,true);}} onClick={()=>doMark(h.id,true)}
+                        style={{flex:1,background:"rgba(0,255,157,0.1)",border:"1px solid rgba(0,255,157,0.28)",color:"#00ff9d",borderRadius:10,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:900,WebkitTapHighlightColor:"transparent"}}>
+                        ✅ Win
+                      </button>
+                      <button onTouchEnd={(e)=>{e.preventDefault();doMark(h.id,false);}} onClick={()=>doMark(h.id,false)}
+                        style={{flex:1,background:"rgba(255,77,77,0.1)",border:"1px solid rgba(255,77,77,0.28)",color:"#ff4d4d",borderRadius:10,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:900,WebkitTapHighlightColor:"transparent"}}>
+                        ❌ Loss
+                      </button>
+                      <button onTouchEnd={(e)=>{e.preventDefault();setMarkingId(null);}} onClick={()=>setMarkingId(null)}
+                        style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",color:"#445566",borderRadius:10,padding:"10px 12px",cursor:"pointer",fontSize:12,WebkitTapHighlightColor:"transparent"}}>
+                        ✕
+                      </button>
+                    </div>
+                  ):(
+                    <button onTouchEnd={(e)=>{e.preventDefault();setMarkingId(h.id);}} onClick={()=>setMarkingId(h.id)}
+                      style={{width:"100%",background:"rgba(255,193,7,0.06)",border:"1px solid rgba(255,193,7,0.18)",color:"#ffc107",borderRadius:10,padding:"9px 0",cursor:"pointer",fontSize:11,fontWeight:700,WebkitTapHighlightColor:"transparent"}}>
+                      ⚡ Result আপডেট করুন
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function SlipTab({cfg}){
   const [sms,setSms]=useState([]);
   const [form,setForm]=useState({teamA:"",teamB:"",market:"1X2 Home Win",odds:""});
@@ -516,7 +824,7 @@ function SlipTab({cfg}){
 // ── MAIN APP ──
 function App(){
   const [cfg,setCfg]=useState(()=>getCfg());
-  const [tab,setTab]=useState("fixtures");
+  const [tab,setTab]=useState("upload");
   const [sport,setSport]=useState("football");
   const [tA,setTA]=useState(""); const [tB,setTB]=useState("");
   const [league,setLeague]=useState(""); const [sm,setSm]=useState([]);
@@ -530,12 +838,12 @@ function App(){
   if(!cfg)return <KeySetup onSave={setCfg}/>;
   const pv=PROVIDERS.find(p=>p.id===cfg.pid)||PROVIDERS[0];
 
-  const onPick=(m)=>{setTA(m.teamA);setTB(m.teamB);setLeague(m.league);setSport("football");setTab("manual");};
+  
   const pf=async(f)=>{if(!f||!f.type.startsWith("image/")){setEr("Image দিন।");return;}setMime(f.type);setPrev(URL.createObjectURL(f));setResults([]);setEr(null);try{setB64(await f2b(f));}catch{setEr("ফাইল পড়া যায়নি।");}};
   const VP=`Look at this betting app screenshot. Extract ALL visible matches. Respond ONLY as JSON array no markdown: [{"teamA":"<n>","teamB":"<n>","sport":"<Football|Cricket|Basketball|Tennis|Hockey>","league":"<l>","rawOdds":"<odds>"}]`;
 
-  const runShot=async()=>{if(!b64){setEr("Screenshot দিন।");return;}setLoad(true);setEr(null);setResults([]);try{setMsg("📸 Matches খুঁজছি...");const txt=await vision(cfg.pid,cfg.key,cfg.vKey,b64,mime,VP);const ms=pa(txt);if(!ms?.length){setEr("Match পাওয়া যায়নি।");setLoad(false);return;}const all=[];for(let i=0;i<ms.length;i++){setMsg(`🤖 ${i+1}/${ms.length}: ${ms[i].teamA} vs ${ms[i].teamB}...`);try{all.push(await predMatch(cfg.pid,cfg.key,ms[i]));}catch(e){all.push({...ms[i],error:e.message,predictions:[],winProb:50,confidence:50});}}setResults(all);}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
-  const runManual=async()=>{if(!tA||!tB){setEr("Team name দিন।");return;}setLoad(true);setEr(null);setManR(null);try{setMsg(`🤖 ${tA} vs ${tB}...`);setManR(await predMatch(cfg.pid,cfg.key,{teamA:tA,teamB:tB,sport,league,rawOdds:sm.join(",")}));}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
+  const runShot=async()=>{if(!b64){setEr("Screenshot দিন।");return;}setLoad(true);setEr(null);setResults([]);try{setMsg("📸 Matches খুঁজছি...");const txt=await vision(cfg.pid,cfg.key,cfg.vKey,b64,mime,VP);const ms=pa(txt);if(!ms?.length){setEr("Match পাওয়া যায়নি।");setLoad(false);return;}const all=[];for(let i=0;i<ms.length;i++){setMsg(`🤖 ${i+1}/${ms.length}: ${ms[i].teamA} vs ${ms[i].teamB}...`);try{const pr=await predMatch(cfg.pid,cfg.key,ms[i]);addPrediction(pr);all.push(pr);}catch(e){all.push({...ms[i],error:e.message,predictions:[],winProb:50,confidence:50});}}setResults(all);}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
+  const runManual=async()=>{if(!tA||!tB){setEr("Team name দিন।");return;}setLoad(true);setEr(null);setManR(null);try{setMsg(`🤖 ${tA} vs ${tB}...`);const res=await predMatch(cfg.pid,cfg.key,{teamA:tA,teamB:tB,sport,league,rawOdds:sm.join(",")});setManR(res);addPrediction(res);}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
 
   const addAcc=(r)=>{const b=r.predictions?.find(p=>p.best)||r.predictions?.[0];if(!b)return;setAccum(a=>[...a,{match:`${r.teamA} vs ${r.teamB}`,market:`${b.market}: ${b.prediction}`,prob:b.prob,id:Date.now()}]);};
   const reset=()=>{clearCfg();setCfg(null);};
@@ -551,6 +859,7 @@ function App(){
     {id:"manual",icon:"✏️",label:"Manual"},
     {id:"slip",icon:"📊",label:"BetSlip",hc:"#ffc107"},
     {id:"accumulator",icon:"🔗",label:accum.length?`Accum(${accum.length})`:"Accum"},
+    {id:"history",icon:"📈",label:"History",hc:"#a78bfa"},
     {id:"admin",icon:"⚙️",label:"Admin"},
   ];
 
@@ -583,10 +892,9 @@ function App(){
           );})}
         </div>
 
-        {/* Fixtures */}
-        {tab==="fixtures"&&<FixTab cfg={cfg} onPick={onPick}/>}
 
         {/* Screenshot */}
+        {{tab==="fixtures"&&<FixTab cfg={pv} onPick={({teamA,teamB,sport,league})=>{setTab("manual");}}/>}
         {tab==="upload"&&<div style={{display:"flex",flexDirection:"column",gap:11}}>
           <div onClick={()=>!load&&fRef.current?.click()} onDrop={e=>{e.preventDefault();setDrag(false);pf(e.dataTransfer.files[0]);}} onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} style={{border:`2px dashed ${drag?pv.color:prev?pv.color+"33":"rgba(255,255,255,0.05)"}`,borderRadius:13,padding:"28px 16px",textAlign:"center",cursor:"pointer",background:drag?`${pv.color}05`:prev?`${pv.color}02`:"rgba(255,255,255,0.01)"}}>
             <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>pf(e.target.files[0])}/>
@@ -626,9 +934,12 @@ function App(){
           </div>}
         </div>}
 
+        {/* History */}
+        {tab==="history"&&<HistoryTab pv={pv}/>}
+
         {/* Admin */}
         {tab==="admin"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {[{l:"AI",v:pv.name,i:pv.icon},{l:"Status",v:pv.badge==="FREE"?"Free":"Paid",i:"✅"},{l:"Fixtures",v:"FD.org",i:"📅"},{l:"Sports",v:"5",i:"🏆"},{l:"Markets",v:"30+",i:"📊"},{l:"BetSlip",v:"Active",i:"📊"}].map(c=><div key={c.l} style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.03)",borderRadius:11,padding:12}}><div style={{fontSize:17,marginBottom:5}}>{c.i}</div><p style={{color:"#0a1418",fontSize:8,fontWeight:700,margin:"0 0 2px",letterSpacing:0.5}}>{c.l.toUpperCase()}</p><p style={{color:pv.color,fontSize:12,fontWeight:900,fontFamily:"monospace"}}>{c.v}</p></div>)}
+          {[{l:"AI",v:pv.name,i:pv.icon},{l:"Status",v:pv.badge==="FREE"?"Free":"Paid",i:"✅"},{l:"Sports",v:"5",i:"🏆"},{l:"Markets",v:"30+",i:"📊"},{l:"BetSlip",v:"Active",i:"📊"}].map(c=><div key={c.l} style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.03)",borderRadius:11,padding:12}}><div style={{fontSize:17,marginBottom:5}}>{c.i}</div><p style={{color:"#0a1418",fontSize:8,fontWeight:700,margin:"0 0 2px",letterSpacing:0.5}}>{c.l.toUpperCase()}</p><p style={{color:pv.color,fontSize:12,fontWeight:900,fontFamily:"monospace"}}>{c.v}</p></div>)}
           <div style={{gridColumn:"1/-1",background:`${pv.color}05`,border:`1px solid ${pv.color}11`,borderRadius:11,padding:12}}>
             <p style={{color:pv.color,fontWeight:700,fontSize:11,marginBottom:8}}>🔄 All Providers</p>
             <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:9}}>{PROVIDERS.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:3,background:cfg.pid===p.id?`${p.color}13`:"rgba(255,255,255,0.018)",border:`1px solid ${cfg.pid===p.id?p.color+"30":"rgba(255,255,255,0.04)"}`,borderRadius:7,padding:"4px 8px"}}><span style={{fontSize:10}}>{p.icon}</span><span style={{color:cfg.pid===p.id?p.color:"#334455",fontSize:9,fontWeight:600}}>{p.name}</span>{cfg.pid===p.id&&<span style={{color:p.color,fontSize:7,fontWeight:900}}>✓</span>}</div>)}</div>
