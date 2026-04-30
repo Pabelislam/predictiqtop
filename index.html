@@ -893,7 +893,7 @@ function App(){
 
 
         {/* Screenshot */}
-        {tab==="fixtures"&&<FixTab cfg={pv} onPick={({teamA,teamB,sport,league})=>{setTab("manual");}}/>}
+        {tab==="fixtures"&&<FixTab cfg={pv} onPick={({teamA,teamB,sport,league})=>{setTA(teamA);setTB(teamB);setSport(sport||"football");setLeague(league||"");setSm([]);setManR(null);setEr(null);setTab("manual");}}/>}
         {tab==="upload"&&<div style={{display:"flex",flexDirection:"column",gap:11}}>
           <div onClick={()=>!load&&fRef.current?.click()} onDrop={e=>{e.preventDefault();setDrag(false);pf(e.dataTransfer.files[0]);}} onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} style={{border:`2px dashed ${drag?pv.color:prev?pv.color+"33":"rgba(255,255,255,0.05)"}`,borderRadius:13,padding:"28px 16px",textAlign:"center",cursor:"pointer",background:drag?`${pv.color}05`:prev?`${pv.color}02`:"rgba(255,255,255,0.01)"}}>
             <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>pf(e.target.files[0])}/>
