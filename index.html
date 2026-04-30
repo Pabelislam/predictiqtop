@@ -178,12 +178,11 @@ function Err({msg}){return msg?<div style={{background:"rgba(255,77,77,0.05)",bo
 function KeySetup({onSave}){
   const [pid,setPid]=useState("groq");
   const [k,setK]=useState("");
-  const [vk,setVk]=useState("");
-  const [sh,setSh]=useState(false);
+    const [sh,setSh]=useState(false);
   const [er,setEr]=useState("");
   const pv=PROVIDERS.find(p=>p.id===pid);
   const nv=["groq","deepseek","kimi"].includes(pid);
-  const go=()=>{if(!k.trim()){setEr("Key দিন।");return;}const c={pid,key:k.trim()};if(nv&&vk.trim())c.vKey=vk.trim();saveCfg(c);onSave(c);};
+  const go=()=>{if(!k.trim()){setEr("Key দিন।");return;}const c={pid,key:k.trim()};saveCfg(c);onSave(c);};
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:18,position:"relative"}}>
       <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(0,255,157,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,157,0.015) 1px,transparent 1px)",backgroundSize:"44px 44px",pointerEvents:"none"}}/>
@@ -202,11 +201,11 @@ function KeySetup({onSave}){
               <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${pid===p.id?p.color:"#1a2a34"}`,background:pid===p.id?p.color:"transparent",flexShrink:0}}/>
             </div>)}
           </div>
-          <div style={{position:"relative",marginBottom:nv?8:er?"7px":"12px"}}>
+          <div style={{position:"relative",marginBottom:er?"7px":"12px"}}>
             <input type={sh?"text":"password"} placeholder={pv.ph} value={k} onChange={e=>setK(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} style={{width:"100%",background:"rgba(255,255,255,0.04)",border:`1px solid ${pv.color}25`,borderRadius:9,padding:"11px 42px 11px 12px",color:"#e0e6f0",fontSize:12,outline:"none"}}/>
             <button onClick={()=>setSh(s=>!s)} style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15}}>{sh?"🙈":"👁️"}</button>
           </div>
-          {nv&&<div style={{background:"rgba(0,255,157,0.04)",border:"1px solid rgba(0,255,157,0.1)",borderRadius:8,padding:"8px 11px",marginBottom:er?"7px":"12px"}}><p style={{color:"#00ff9d",fontSize:10,fontWeight:700,margin:"0 0 4px"}}>📸 Gemini Vision Key (optional, for screenshot):</p><input type="password" placeholder="AIzaSy..." value={vk} onChange={e=>setVk(e.target.value)} style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(0,255,157,0.18)",borderRadius:7,padding:"8px 10px",color:"#e0e6f0",fontSize:11,outline:"none"}}/></div>}
+          
           {er&&<p style={{color:"#ff6b6b",fontSize:11,margin:"0 0 9px"}}>⚠️ {er}</p>}
           <button onClick={go} style={{width:"100%",background:`linear-gradient(135deg,${pv.color},${pv.color}cc)`,border:"none",borderRadius:10,padding:"12px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:14,boxShadow:`0 4px 20px ${pv.color}28`,marginBottom:13}}>✅ শুরু করুন</button>
           <div style={{background:`${pv.color}08`,border:`1px solid ${pv.color}13`,borderRadius:8,padding:"9px 11px"}}><p style={{color:pv.color,fontSize:10,fontWeight:800,margin:"0 0 5px"}}>📋 Key পাবেন:</p>{pv.steps.map((s,i)=><div key={i} style={{display:"flex",gap:6,marginBottom:i<3?3:0}}><span style={{color:pv.color,fontSize:9,fontWeight:800,flexShrink:0}}>{i+1}.</span><span style={{color:"#334455",fontSize:10,lineHeight:1.5}}>{s}</span></div>)}</div>
