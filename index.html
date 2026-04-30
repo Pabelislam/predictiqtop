@@ -94,38 +94,36 @@ async function predSlip(pid,key,matches){
   return pj(txt);
 }
 
+// BD timezone helpers
+function toBDDateStr(offsetDays=0){
+  const d=new Date(Date.now()+(6*3600000)+(offsetDays*86400000));
+  return d.toISOString().split("T")[0];
+}
+function fmtTimeBD(utcStr){
+  const d=new Date(new Date(utcStr).getTime()+(6*3600000));
+  const h=d.getUTCHours(),m=d.getUTCMinutes();
+  return `${h%12||12}:${String(m).padStart(2,"0")} ${h>=12?"PM":"AM"}`;
+}
+function fmtDateBD(utcStr){
+  const d=new Date(new Date(utcStr).getTime()+(6*3600000));
+  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${days[d.getUTCDay()]}, ${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+function isTodayBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(0);}
+function isTomorrowBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(1);}
+
 async function fetchFD(fdKey,league,from,to){
   const apiUrl=`https://api.football-data.org/v4/competitions/${league}/matches?dateFrom=${from}&dateTo=${to}`;
-  // Try direct first, fallback to CORS proxies
-  const proxies=[
-    async()=>{
-      const r=await fetch(apiUrl,{headers:{"X-Auth-Token":fdKey}});
-      if(!r.ok){const d=await r.json();throw new Error(d.message||`Error ${r.status}`);}
-      return r.json();
-    },
-    async()=>{
-      const encoded=encodeURIComponent(apiUrl);
-      const r=await fetch(`https://api.allorigins.win/get?url=${encoded}`);
-      if(!r.ok)throw new Error("Proxy error");
-      const wrapper=await r.json();
-      const d=JSON.parse(wrapper.contents);
-      if(d.error||d.message?.toLowerCase().includes("error"))throw new Error(d.message||"API error");
-      return d;
-    },
-    async()=>{
-      const r=await fetch(`https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,{headers:{"X-Auth-Token":fdKey}});
-      if(!r.ok)throw new Error("Proxy2 error");
-      return r.json();
-    }
-  ];
-  let lastErr;
-  for(const fn of proxies){
-    try{
-      const d=await fn();
-      return(d.matches||[]).map(m=>({id:m.id,home:m.homeTeam?.shortName||m.homeTeam?.name||"Home",away:m.awayTeam?.shortName||m.awayTeam?.name||"Away",league:m.competition?.name||league,date:m.utcDate,status:m.status,matchday:m.matchday,homeScore:m.score?.fullTime?.home,awayScore:m.score?.fullTime?.away}));
-    }catch(e){lastErr=e;}
-  }
-  throw new Error(lastErr?.message||"Failed to fetch fixtures");
+  const parse=(d)=>(d.matches||[]).map(m=>({id:m.id,home:m.homeTeam?.shortName||m.homeTeam?.name||"Home",away:m.awayTeam?.shortName||m.awayTeam?.name||"Away",league:m.competition?.name||league,date:m.utcDate,status:m.status,matchday:m.matchday,homeScore:m.score?.fullTime?.home,awayScore:m.score?.fullTime?.away}));
+  const hdrs={"X-Auth-Token":fdKey};
+  const sig=()=>AbortSignal.timeout(9000);
+  // 1) corsproxy.io
+  try{const r=await fetch(`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,{headers:hdrs,signal:sig()});if(r.ok){const d=await r.json();if(d.matches!==undefined)return parse(d);}}catch{}
+  // 2) allorigins
+  try{const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,{signal:sig()});if(r.ok){const w=await r.json();const d=JSON.parse(w.contents);if(d.matches!==undefined)return parse(d);}}catch{}
+  // 3) direct
+  try{const r=await fetch(apiUrl,{headers:hdrs,signal:sig()});if(r.ok)return parse(await r.json());const d=await r.json();throw new Error(d.message||`HTTP ${r.status}`);}catch(e){throw new Error(e.message||"Fixtures লোড ব্যর্থ। পরে আবার চেষ্টা করুন।");}
 }
 
 // ── Shared UI ──
@@ -224,8 +222,8 @@ function FixTab({cfg,onPick}){
     if(!k)return;
     setLoad(true);setEr(null);
     try{
-      const now=new Date(),from=now.toISOString().split("T")[0];
-      const to=new Date(now.getTime()+3*864e5).toISOString().split("T")[0];
+      const from=toBDDateStr(0);
+      const to=toBDDateStr(30);
       const data=await fetchFD(k,l,from,to);
       setMs(data);setLu(new Date());
     }catch(e){setEr(e.message);}
@@ -239,8 +237,8 @@ function FixTab({cfg,onPick}){
 
   const filtered=ms.filter(m=>{
     if(q){const qq=q.toLowerCase();if(!m.home.toLowerCase().includes(qq)&&!m.away.toLowerCase().includes(qq))return false;}
-    if(dtF==="today"&&!isToday(m.date))return false;
-    if(dtF==="tomorrow"&&!isTomorrow(m.date))return false;
+    if(dtF==="today"&&!isTodayBD(m.date))return false;
+    if(dtF==="tomorrow"&&!isTomorrowBD(m.date))return false;
     return true;
   });
 
@@ -259,7 +257,7 @@ function FixTab({cfg,onPick}){
           <div style={{width:48,height:48,borderRadius:14,background:"rgba(59,158,255,0.12)",border:"1px solid rgba(59,158,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>📅</div>
           <div><div style={{display:"flex",alignItems:"center",gap:9}}><h2 style={{color:"#fff",fontSize:19,fontWeight:900,margin:0}}>Live <span style={{color:"#3b9eff"}}>Fixtures</span></h2>{liveCount>0&&<span style={{background:"rgba(255,77,77,0.13)",color:"#ff4d4d",fontSize:10,fontWeight:900,padding:"3px 9px",borderRadius:20,border:"1px solid rgba(255,77,77,0.25)",animation:"lp 2s infinite"}}>🔴 {liveCount} LIVE</span>}</div><p style={{color:"#334455",fontSize:12,margin:0}}>Upcoming · Live · Auto Refresh</p></div>
         </div>
-        {lu&&<p style={{color:"#1a2a34",fontSize:9}}>🔄 Updated: {lu.toLocaleTimeString()}</p>}
+        {lu&&<p style={{color:"#1a2a34",fontSize:11}}>🔄 Updated: {fmtTimeBD(lu.toISOString())} (BD)</p>}
       </div>
 
       {/* FD Key */}
@@ -301,14 +299,29 @@ function FixTab({cfg,onPick}){
       </div>}
 
       {/* Match groups */}
-      {fdk&&!load&&Object.keys(grouped).length===0&&!er&&<div style={{textAlign:"center",padding:"36px",color:"#1a2a34"}}><div style={{fontSize:42,marginBottom:8}}>📅</div><p style={{fontSize:12}}>এই সময়ে match নেই।</p></div>}
+      {fdk&&!load&&Object.keys(grouped).length===0&&!er&&(
+  <div style={{textAlign:"center",padding:"40px 20px"}}>
+    <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:14,background:"rgba(59,158,255,0.04)",border:"1px solid rgba(59,158,255,0.1)",borderRadius:20,padding:"32px 36px"}}>
+      <div style={{fontSize:52}}>🏟️</div>
+      <div>
+        <p style={{color:"#c8d8e8",fontSize:15,fontWeight:800,margin:"0 0 6px"}}>কোনো Match পাওয়া যায়নি</p>
+        <p style={{color:"#2a3a44",fontSize:12,lineHeight:1.7,margin:0}}>এই লিগে এখন কোনো upcoming match নেই।<br/>অন্য একটি League বেছে নিন।</p>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
+        {["🏴󠁧󠁢󠁥󠁮󠁧󠁿 PL","🇪🇸 La Liga","🌍 UCL"].map(l=>(
+          <span key={l} style={{background:"rgba(59,158,255,0.08)",border:"1px solid rgba(59,158,255,0.18)",borderRadius:20,padding:"5px 13px",color:"#3b9eff",fontSize:11,fontWeight:700}}>{l}</span>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
 
       {Object.entries(grouped).map(([ds,dms])=>(
         <div key={ds}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
             <div style={{height:1,flex:1,background:"rgba(255,255,255,0.03)"}}/>
-            <span style={{background:isToday(dms[0].date)?"rgba(0,255,157,0.07)":isTomorrow(dms[0].date)?"rgba(255,193,7,0.07)":"rgba(255,255,255,0.03)",color:isToday(dms[0].date)?"#00ff9d":isTomorrow(dms[0].date)?"#ffc107":"#445566",fontSize:9,fontWeight:800,padding:"3px 11px",borderRadius:20,border:`1px solid ${isToday(dms[0].date)?"rgba(0,255,157,0.18)":isTomorrow(dms[0].date)?"rgba(255,193,7,0.18)":"rgba(255,255,255,0.05)"}`,whiteSpace:"nowrap"}}>
-              {isToday(dms[0].date)?"📅 Today":isTomorrow(dms[0].date)?"📅 Tomorrow":fmtDate(dms[0].date)}
+            <span style={{background:isTodayBD(dms[0].date)?"rgba(0,255,157,0.07)":isTomorrowBD(dms[0].date)?"rgba(255,193,7,0.07)":"rgba(255,255,255,0.03)",color:isTodayBD(dms[0].date)?"#00ff9d":isTomorrowBD(dms[0].date)?"#ffc107":"#445566",fontSize:9,fontWeight:800,padding:"3px 11px",borderRadius:20,border:`1px solid ${isTodayBD(dms[0].date)?"rgba(0,255,157,0.18)":isTomorrowBD(dms[0].date)?"rgba(255,193,7,0.18)":"rgba(255,255,255,0.05)"}`,whiteSpace:"nowrap"}}>
+              {isTodayBD(dms[0].date)?"📅 Today":isTomorrowBD(dms[0].date)?"📅 Tomorrow":fmtDateBD(dms[0].date)}
             </span>
             <div style={{height:1,flex:1,background:"rgba(255,255,255,0.03)"}}/>
           </div>
@@ -329,7 +342,7 @@ function FixTab({cfg,onPick}){
                         <span style={{color:"#fff",fontSize:15,fontWeight:800,flex:1,textAlign:"right"}}>{m.away}</span>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:9}}>
-                        <span style={{color:"#2a3a44",fontSize:12}}>🕒 {fmtTime(m.date)}</span>
+                        <span style={{color:"#2a3a44",fontSize:12}}>🕒 {fmtTimeBD(m.date)}</span>
                         {st.live&&<span style={{width:6,height:6,borderRadius:"50%",background:"#ff4d4d",display:"inline-block",animation:"lp 1.5s infinite"}}/>}
                         <span style={{color:st.color,fontSize:9,fontWeight:700}}>{st.label}</span>
                       </div>
