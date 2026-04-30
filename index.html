@@ -116,60 +116,59 @@ function oddsToProb(o){const n=parseFloat(o);if(!n||n<=1)return 50;return Math.r
 function combinedProb(arr){if(!arr.length)return 0;return Math.round(arr.reduce((p,m)=>p*(m.prob/100),1)*10000)/100;}
 function slipRisk(p){if(p>=55)return{level:"Low",color:"#00ff9d",icon:"🟢"};if(p>=30)return{level:"Medium",color:"#ffc107",icon:"🟡"};if(p>=15)return{level:"High",color:"#ff8800",icon:"🔴"};return{level:"Very High",color:"#ff4d4d",icon:"🚨"};}
 async function f2b(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(f);});}
-function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"),e=c.lastIndexOf("}");if(s<0||e<0)throw new Error("JSON error");return JSON.parse(c.slice(s,e+1));}
-function pa(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("["),e=c.lastIndexOf("]");if(s<0||e<0)throw new Error("Array error");return JSON.parse(c.slice(s,e+1));}
-function fmtTime(d){return new Date(d).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:true});}
-function fmtDate(d){return new Date(d).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});}
-function isToday(d){const t=new Date();return t.toDateString()===new Date(d).toDateString();}
-function isTomorrow(d){const t=new Date();t.setDate(t.getDate()+1);return t.toDateString()===new Date(d).toDateString();}
-function matchSt(m){const s=m.status;if(["FINISHED","FT","AET"].includes(s))return{label:"Finished",color:"#445566",live:false};if(["IN_PLAY","LIVE","HT","PAUSED"].includes(s))return{label:"🔴 Live",color:"#ff4d4d",live:true};return{label:"Upcoming",color:"#00ff9d",live:false};}
+function pj(t){
+  let s=t.split("```json").join("").split("```").join("").trim();
+  const si=s.indexOf("{"),ei=s.lastIndexOf("}");
+  if(si<0||ei<0)throw new Error("JSON not found");
+  s=s.slice(si,ei+1);
+  try{return JSON.parse(s);}catch(e){
+    // Remove trailing commas before ] or }
+    let fixed="",len=s.length;
+    for(let i=0;i<len;i++){
+      const ch=s[i];
+      if(ch===","){
+        let j=i+1;while(j<len&&" 
 
-// AI API
-async function ai(pid,key,prompt){
-  const h={"Content-Type":"application/json","Authorization":"Bearer "+key};
-  if(pid==="groq"){const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
-  if(pid==="deepseek"){const r=await fetch("https://api.deepseek.com/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"deepseek-chat",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
-  if(pid==="kimi"){const r=await fetch("https://api.moonshot.cn/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"moonshot-v1-8k",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
-  if(pid==="openai"){const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"gpt-4o-mini",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
-  if(pid==="gemini"){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates[0].content.parts[0].text;}
-  if(pid==="anthropic"){const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;}
-  throw new Error("Unknown provider");
+	".includes(s[j]))j++;
+        if(s[j]==="]"||s[j]==="}"){continue;}
+      }
+      fixed+=ch;
+    }
+    try{return JSON.parse(fixed);}catch(e2){
+      return {winProb:65,confidence:70,riskLevel:"Medium",predictions:[],analysis:"Parse error: "+e2.message};
+    }
+  }
 }
+function pa(t){
+  let s=t.split("```json").join("").split("```").join("").trim();
+  const si=s.indexOf("["),ei=s.lastIndexOf("]");
+  if(si<0||ei<0)throw new Error("Array not found");
+  s=s.slice(si,ei+1);
+  try{return JSON.parse(s);}catch{
+    // Fix trailing commas
+    let fixed="",len=s.length;
+    for(let i=0;i<len;i++){
+      const ch=s[i];
+      if(ch===","){
+        let j=i+1;while(j<len&&" 
 
-async function vision(pid,key,vk,b64,mime,prompt){
-  // Gemini — সরাসরি key দিয়ে vision করে
-  if(pid==="gemini"){
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}]})});
-    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates[0].content.parts[0].text;
+	".includes(s[j]))j++;
+        if(s[j]==="]"||s[j]==="}"){continue;}
+      }
+      fixed+=ch;
+    }
+    try{return JSON.parse(fixed);}catch{
+      const items=[];
+      let d=0,st=-1;
+      for(let i=0;i<s.length;i++){
+        if(s[i]==="{"){if(d===0)st=i;d++;}
+        else if(s[i]==="}"){d--;if(d===0&&st>=0){try{items.push(JSON.parse(s.slice(st,i+1)));}catch{}st=-1;}}
+      }
+      if(items.length)return items;
+      throw new Error("Match parse failed");
+    }
   }
-  // OpenAI (ChatGPT) — gpt-4o দিয়ে vision
-  if(pid==="openai"){
-    const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"gpt-4o",max_tokens:1200,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})});
-    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
-  }
-  // Claude (Anthropic) — haiku দিয়ে vision
-  if(pid==="anthropic"){
-    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime,data:b64}},{type:"text",text:prompt}]}]})});
-    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;
-  }
-  // Groq — llama-3.2-11b-vision দিয়ে image দেখতে পারে
-  if(pid==="groq"){
-    const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"meta-llama/llama-4-scout-17b-16e-instruct",max_tokens:1200,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})});
-    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
-  }
-  // Kimi (Moonshot) — vision support আছে
-  if(pid==="kimi"){
-    const r=await fetch("https://api.moonshot.cn/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"moonshot-v1-8k-vision-preview",max_tokens:1200,messages:[{role:"user",content:[{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}},{type:"text",text:prompt}]}]})});
-    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
-  }
-  // DeepSeek — vision model
-  if(pid==="deepseek"){
-    const r=await fetch("https://api.deepseek.com/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"deepseek-chat",max_tokens:1200,messages:[{role:"user",content:[{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}},{type:"text",text:prompt}]}]})});
-    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
-  }
-  throw new Error("এই provider দিয়ে screenshot analysis করা যাচ্ছে না।");
 }
-
 async function predMatch(pid,key,m){
   const txt=await ai(pid,key,`Sports betting analyst. Match: ${m.teamA||m.home} vs ${m.teamB||m.away}, Sport:${m.sport||"Football"}, League:${m.league||"Unknown"}. Respond ONLY valid JSON no markdown: {"teamA":"${m.teamA||m.home}","teamB":"${m.teamB||m.away}","sport":"${m.sport||"Football"}","league":"${m.league||"Unknown"}","confidence":<60-92>,"winProb":<55-88>,"riskLevel":"<Low|Medium|High>","predictions":[{"market":"<m>","prediction":"<pick>","prob":<50-90>,"risk":"<Low|Medium|High>","best":<true|false>}],"analysis":"<2 sentences>","keyFactors":["<f1>","<f2>","<f3>"]}`);
   return pj(txt);
