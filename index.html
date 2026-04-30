@@ -114,16 +114,39 @@ function isTodayBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000
 function isTomorrowBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(1);}
 
 async function fetchFD(fdKey,league,from,to){
-  const apiUrl=`https://api.football-data.org/v4/competitions/${league}/matches?dateFrom=${from}&dateTo=${to}`;
   const parse=(d)=>(d.matches||[]).map(m=>({id:m.id,home:m.homeTeam?.shortName||m.homeTeam?.name||"Home",away:m.awayTeam?.shortName||m.awayTeam?.name||"Away",league:m.competition?.name||league,date:m.utcDate,status:m.status,matchday:m.matchday,homeScore:m.score?.fullTime?.home,awayScore:m.score?.fullTime?.away}));
-  const hdrs={"X-Auth-Token":fdKey};
-  const sig=()=>AbortSignal.timeout(9000);
-  // 1) corsproxy.io
-  try{const r=await fetch(`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,{headers:hdrs,signal:sig()});if(r.ok){const d=await r.json();if(d.matches!==undefined)return parse(d);}}catch{}
-  // 2) allorigins
-  try{const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,{signal:sig()});if(r.ok){const w=await r.json();const d=JSON.parse(w.contents);if(d.matches!==undefined)return parse(d);}}catch{}
-  // 3) direct
-  try{const r=await fetch(apiUrl,{headers:hdrs,signal:sig()});if(r.ok)return parse(await r.json());const d=await r.json();throw new Error(d.message||`HTTP ${r.status}`);}catch(e){throw new Error(e.message||"Fixtures লোড ব্যর্থ। পরে আবার চেষ্টা করুন।");}
+  const sig=()=>AbortSignal.timeout(10000);
+  const apiUrl=`https://api.football-data.org/v4/competitions/${league}/matches?dateFrom=${from}&dateTo=${to}`;
+
+  // প্রতিটা proxy আলাদা আলাদা try করে
+  const proxies=[
+    // 1) corsproxy.io — সবচেয়ে reliable
+    ()=>fetch(`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,{headers:{"X-Auth-Token":fdKey},signal:sig()}),
+    // 2) allorigins — content wrapper
+    ()=>fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,{signal:sig()}).then(async r=>{
+      if(!r.ok)throw new Error("allorigins failed");
+      const w=await r.json();
+      // fake a Response so the outer code can call .json()
+      return new Response(w.contents,{status:200,headers:{"Content-Type":"application/json"}});
+    }),
+    // 3) jsonp.io
+    ()=>fetch(`https://jsonp.afeld.me/?url=${encodeURIComponent(apiUrl)}`,{headers:{"X-Auth-Token":fdKey},signal:sig()}),
+    // 4) thingproxy
+    ()=>fetch(`https://thingproxy.freeboard.io/fetch/${apiUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()}),
+    // 5) direct (works on some networks)
+    ()=>fetch(apiUrl,{headers:{"X-Auth-Token":fdKey},signal:sig()}),
+  ];
+
+  for(const fn of proxies){
+    try{
+      const r=await fn();
+      if(!r.ok)continue;
+      const d=await r.json();
+      if(d.matches!==undefined)return parse(d);
+      if(d.error||d.message)continue;
+    }catch{}
+  }
+  throw new Error("সব proxy ব্যর্থ হয়েছে। আপনার Football-Data.org API key টি সঠিক কিনা চেক করুন।");
 }
 
 // ── Shared UI ──
