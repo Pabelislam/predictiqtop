@@ -137,11 +137,37 @@ async function ai(pid,key,prompt){
 }
 
 async function vision(pid,key,vk,b64,mime,prompt){
-  const gk=pid==="gemini"?key:vk;
-  if(gk){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gk}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates[0].content.parts[0].text;}
-  if(pid==="openai"){const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"gpt-4o",max_tokens:1200,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
-  if(pid==="anthropic"){const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime,data:b64}},{type:"text",text:prompt}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;}
-  throw new Error("Vision এর জন্য Gemini/OpenAI/Claude key লাগবে।");
+  // Gemini — সরাসরি key দিয়ে vision করে
+  if(pid==="gemini"){
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}]})});
+    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates[0].content.parts[0].text;
+  }
+  // OpenAI (ChatGPT) — gpt-4o দিয়ে vision
+  if(pid==="openai"){
+    const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"gpt-4o",max_tokens:1200,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})});
+    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
+  }
+  // Claude (Anthropic) — haiku দিয়ে vision
+  if(pid==="anthropic"){
+    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime,data:b64}},{type:"text",text:prompt}]}]})});
+    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;
+  }
+  // Groq — llama-3.2-11b-vision দিয়ে image দেখতে পারে
+  if(pid==="groq"){
+    const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"llama-3.2-11b-vision-preview",max_tokens:1200,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})});
+    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
+  }
+  // Kimi (Moonshot) — vision support আছে
+  if(pid==="kimi"){
+    const r=await fetch("https://api.moonshot.cn/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"moonshot-v1-8k-vision-preview",max_tokens:1200,messages:[{role:"user",content:[{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}},{type:"text",text:prompt}]}]})});
+    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
+  }
+  // DeepSeek — vision model
+  if(pid==="deepseek"){
+    const r=await fetch("https://api.deepseek.com/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"deepseek-chat",max_tokens:1200,messages:[{role:"user",content:[{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}},{type:"text",text:prompt}]}]}));
+    const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;
+  }
+  throw new Error("এই provider দিয়ে screenshot analysis করা যাচ্ছে না।");
 }
 
 async function predMatch(pid,key,m){
@@ -171,12 +197,11 @@ function Err({msg}){return msg?<div style={{background:"rgba(255,77,77,0.05)",bo
 function KeySetup({onSave}){
   const [pid,setPid]=useState("groq");
   const [k,setK]=useState("");
-  const [vk,setVk]=useState("");
   const [sh,setSh]=useState(false);
   const [er,setEr]=useState("");
   const pv=PROVIDERS.find(p=>p.id===pid);
   const nv=["groq","deepseek","kimi"].includes(pid);
-  const go=()=>{if(!k.trim()){setEr("Key দিন।");return;}const c={pid,key:k.trim()};if(nv&&vk.trim())c.vKey=vk.trim();saveCfg(c);onSave(c);};
+  const go=()=>{if(!k.trim()){setEr("Key দিন।");return;}const c={pid,key:k.trim()};saveCfg(c);onSave(c);};
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:18,position:"relative"}}>
       <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(0,255,157,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,157,0.015) 1px,transparent 1px)",backgroundSize:"44px 44px",pointerEvents:"none"}}/>
@@ -195,11 +220,11 @@ function KeySetup({onSave}){
               <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${pid===p.id?p.color:"#1a2a34"}`,background:pid===p.id?p.color:"transparent",flexShrink:0}}/>
             </div>)}
           </div>
-          <div style={{position:"relative",marginBottom:nv?8:er?"7px":"12px"}}>
+          <div style={{position:"relative",marginBottom:er?"7px":"12px"}}>
             <input type={sh?"text":"password"} placeholder={pv.ph} value={k} onChange={e=>setK(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} style={{width:"100%",background:"rgba(255,255,255,0.04)",border:`1px solid ${pv.color}25`,borderRadius:9,padding:"11px 42px 11px 12px",color:"#e0e6f0",fontSize:12,outline:"none"}}/>
             <button onClick={()=>setSh(s=>!s)} style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15}}>{sh?"🙈":"👁️"}</button>
           </div>
-          {nv&&<div style={{background:"rgba(0,255,157,0.04)",border:"1px solid rgba(0,255,157,0.1)",borderRadius:8,padding:"8px 11px",marginBottom:er?"7px":"12px"}}><p style={{color:"#00ff9d",fontSize:10,fontWeight:700,margin:"0 0 4px"}}>📸 Gemini Vision Key (optional, for screenshot):</p><input type="password" placeholder="AIzaSy..." value={vk} onChange={e=>setVk(e.target.value)} style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(0,255,157,0.18)",borderRadius:7,padding:"8px 10px",color:"#e0e6f0",fontSize:11,outline:"none"}}/></div>}
+          
           {er&&<p style={{color:"#ff6b6b",fontSize:11,margin:"0 0 9px"}}>⚠️ {er}</p>}
           <button onClick={go} style={{width:"100%",background:`linear-gradient(135deg,${pv.color},${pv.color}cc)`,border:"none",borderRadius:10,padding:"12px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:14,boxShadow:`0 4px 20px ${pv.color}28`,marginBottom:13}}>✅ শুরু করুন</button>
           <div style={{background:`${pv.color}08`,border:`1px solid ${pv.color}13`,borderRadius:8,padding:"9px 11px"}}><p style={{color:pv.color,fontSize:10,fontWeight:800,margin:"0 0 5px"}}>📋 Key পাবেন:</p>{pv.steps.map((s,i)=><div key={i} style={{display:"flex",gap:6,marginBottom:i<3?3:0}}><span style={{color:pv.color,fontSize:9,fontWeight:800,flexShrink:0}}>{i+1}.</span><span style={{color:"#334455",fontSize:10,lineHeight:1.5}}>{s}</span></div>)}</div>
@@ -842,7 +867,7 @@ function App(){
   const pf=async(f)=>{if(!f||!f.type.startsWith("image/")){setEr("Image দিন।");return;}setMime(f.type);setPrev(URL.createObjectURL(f));setResults([]);setEr(null);try{setB64(await f2b(f));}catch{setEr("ফাইল পড়া যায়নি।");}};
   const VP=`Look at this betting app screenshot. Extract ALL visible matches. Respond ONLY as JSON array no markdown: [{"teamA":"<n>","teamB":"<n>","sport":"<Football|Cricket|Basketball|Tennis|Hockey>","league":"<l>","rawOdds":"<odds>"}]`;
 
-  const runShot=async()=>{if(!b64){setEr("Screenshot দিন।");return;}setLoad(true);setEr(null);setResults([]);try{setMsg("📸 Matches খুঁজছি...");const txt=await vision(cfg.pid,cfg.key,cfg.vKey,b64,mime,VP);const ms=pa(txt);if(!ms?.length){setEr("Match পাওয়া যায়নি।");setLoad(false);return;}const all=[];for(let i=0;i<ms.length;i++){setMsg(`🤖 ${i+1}/${ms.length}: ${ms[i].teamA} vs ${ms[i].teamB}...`);try{const pr=await predMatch(cfg.pid,cfg.key,ms[i]);addPrediction(pr);all.push(pr);}catch(e){all.push({...ms[i],error:e.message,predictions:[],winProb:50,confidence:50});}}setResults(all);}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
+  const runShot=async()=>{if(!b64){setEr("Screenshot দিন।");return;}setLoad(true);setEr(null);setResults([]);try{const pname={"groq":"Groq","gemini":"Gemini","deepseek":"DeepSeek","kimi":"Kimi","openai":"ChatGPT","anthropic":"Claude"}[cfg.pid]||cfg.pid;setMsg(`📸 ${pname} দিয়ে বিশ্লেষণ হচ্ছে...`);const txt=await vision(cfg.pid,cfg.key,cfg.vKey,b64,mime,VP);const ms=pa(txt);if(!ms?.length){setEr("Match পাওয়া যায়নি।");setLoad(false);return;}const all=[];for(let i=0;i<ms.length;i++){setMsg(`🤖 ${i+1}/${ms.length}: ${ms[i].teamA} vs ${ms[i].teamB}...`);try{const pr=await predMatch(cfg.pid,cfg.key,ms[i]);addPrediction(pr);all.push(pr);}catch(e){all.push({...ms[i],error:e.message,predictions:[],winProb:50,confidence:50});}}setResults(all);}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
   const runManual=async()=>{if(!tA||!tB){setEr("Team name দিন।");return;}setLoad(true);setEr(null);setManR(null);try{setMsg(`🤖 ${tA} vs ${tB}...`);const res=await predMatch(cfg.pid,cfg.key,{teamA:tA,teamB:tB,sport,league,rawOdds:sm.join(",")});setManR(res);addPrediction(res);}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
 
   const addAcc=(r)=>{const b=r.predictions?.find(p=>p.best)||r.predictions?.[0];if(!b)return;setAccum(a=>[...a,{match:`${r.teamA} vs ${r.teamB}`,market:`${b.market}: ${b.prediction}`,prob:b.prob,id:Date.now()}]);};
