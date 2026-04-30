@@ -4,9 +4,16 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>PredictIQ — AI Sports Prediction</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+<script>
+window.addEventListener('error',function(e){
+  if(e.message&&e.message.indexOf('React')>=0||!window.React){
+    document.body.innerHTML='<div style="color:#ff7070;text-align:center;padding:40px;font-family:sans-serif"><h2>⚠️ Loading Error</h2><p style="margin-top:10px;color:#888">Please check your internet connection and reload.</p><button onclick="location.reload()" style="margin-top:20px;padding:12px 24px;background:#00ff9d;color:#000;border:none;border-radius:8px;font-size:16px;cursor:pointer">🔄 Reload</button></div>';
+  }
+});
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px}
@@ -116,9 +123,7 @@ function oddsToProb(o){const n=parseFloat(o);if(!n||n<=1)return 50;return Math.r
 function combinedProb(arr){if(!arr.length)return 0;return Math.round(arr.reduce((p,m)=>p*(m.prob/100),1)*10000)/100;}
 function slipRisk(p){if(p>=55)return{level:"Low",color:"#00ff9d",icon:"🟢"};if(p>=30)return{level:"Medium",color:"#ffc107",icon:"🟡"};if(p>=15)return{level:"High",color:"#ff8800",icon:"🔴"};return{level:"Very High",color:"#ff4d4d",icon:"🚨"};}
 async function f2b(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(f);});}
-function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"),e=c.lastIndexOf("}");if(s<0||e<0)throw new Error("JSON error");const j=c.slice(s,e+1);try{return JSON.parse(j);}catch(er){let f="",n=j.length;for(let i=0;i<n;i++){if(j[i]===","){let k=i+1;while(k<n&&" 
-
-	".indexOf(j[k])>=0)k++;if(j[k]==="]"||j[k]==="}") continue;}f+=j[i];}try{return JSON.parse(f);}catch{return {winProb:65,confidence:70,riskLevel:"Medium",predictions:[],sport:"Football",league:"Unknown",analysis:"Parse error"};}}}
+function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"),e=c.lastIndexOf("}");if(s<0||e<0)throw new Error("JSON error");return JSON.parse(c.slice(s,e+1));}
 function pa(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("["),e=c.lastIndexOf("]");if(s<0||e<0)throw new Error("Array error");return JSON.parse(c.slice(s,e+1));}
 function fmtTime(d){return new Date(d).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:true});}
 function fmtDate(d){return new Date(d).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});}
