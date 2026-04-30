@@ -115,40 +115,75 @@ function isTomorrowBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600
 
 async function fetchFD(fdKey,league,from,to){
   const parse=(d)=>(d.matches||[]).map(m=>({id:m.id,home:m.homeTeam?.shortName||m.homeTeam?.name||"Home",away:m.awayTeam?.shortName||m.awayTeam?.name||"Away",league:m.competition?.name||league,date:m.utcDate,status:m.status,matchday:m.matchday,homeScore:m.score?.fullTime?.home,awayScore:m.score?.fullTime?.away}));
-  const sig=()=>AbortSignal.timeout(12000);
-  const apiUrl=`https://api.football-data.org/v4/competitions/${league}/matches?dateFrom=${from}&dateTo=${to}`;
-  const enc=encodeURIComponent(apiUrl);
+  const sig=()=>AbortSignal.timeout(14000);
+  const BASE="https://api.football-data.org/v4/competitions";
+  const path=`${league}/matches?dateFrom=${from}&dateTo=${to}`;
+  const fullUrl=`${BASE}/${path}`;
+  const enc=encodeURIComponent(fullUrl);
 
-  const proxies=[
-    // 1) corsproxy.io
-    async()=>{const r=await fetch(`https://corsproxy.io/?url=${enc}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error("corsproxy "+r.status);return r;},
-    // 2) allorigins — token URL এ embed
-    async()=>{const tUrl=`https://api.football-data.org/v4/competitions/${league}/matches?dateFrom=${from}&dateTo=${to}&X-Auth-Token=${fdKey}`;const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(tUrl)}`,{signal:sig()});if(!r.ok)throw new Error("allorigins "+r.status);const w=await r.json();if(!w.contents)throw new Error("allorigins empty");const parsed=JSON.parse(w.contents);if(parsed.errorCode===403)throw new Error("API key সঠিক নয়");return new Response(w.contents,{status:200,headers:{"Content-Type":"application/json"}});},
-    // 3) cors-anywhere
-    async()=>{const r=await fetch(`https://cors-anywhere.herokuapp.com/${apiUrl}`,{headers:{"X-Auth-Token":fdKey,"X-Requested-With":"XMLHttpRequest"},signal:sig()});if(!r.ok)throw new Error("cors-anywhere "+r.status);return r;},
-    // 4) corsproxy.io alternative
-    async()=>{const r=await fetch(`https://corsproxy.io/?${enc}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error("corsproxy2 "+r.status);return r;},
-    // 5) proxy.cors.sh
-    async()=>{const r=await fetch(`https://proxy.cors.sh/${apiUrl}`,{headers:{"X-Auth-Token":fdKey,"x-cors-api-key":"temp_key"},signal:sig()});if(!r.ok)throw new Error("cors.sh "+r.status);return r;},
-    // 6) direct
-    async()=>{const r=await fetch(apiUrl,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error("direct "+r.status);return r;},
+  // Helper: parse response safely
+  async function tryParse(r){
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    if(d.errorCode===403)throw new Error("BAD_KEY");
+    if(d.errorCode===429)throw new Error("RATE_LIMIT");
+    if(d.matches!==undefined)return parse(d);
+    throw new Error("NO_MATCHES");
+  }
+
+  const attempts=[
+    // 1) worker.bridged.cc — সবচেয়ে reliable CORS proxy
+    async()=>tryParse(await fetch(`https://worker.bridged.cc/${fullUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
+
+    // 2) api.codetabs.com
+    async()=>{
+      const r=await fetch(`https://api.codetabs.com/v1/proxy?quest=${enc}`,{signal:sig()});
+      if(!r.ok)throw new Error("codetabs "+r.status);
+      // codetabs returns raw response
+      const t=await r.text();
+      const d=JSON.parse(t);
+      if(d.errorCode===403)throw new Error("BAD_KEY");
+      if(d.matches!==undefined)return parse(d);
+      throw new Error("NO_MATCHES");
+    },
+
+    // 3) corsproxy.io — header সহ
+    async()=>tryParse(await fetch(`https://corsproxy.io/?url=${enc}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
+
+    // 4) allorigins — token embed করে URL এ
+    async()=>{
+      const tokenUrl=encodeURIComponent(`${fullUrl}&X-Auth-Token=${fdKey}`);
+      const r=await fetch(`https://api.allorigins.win/get?url=${tokenUrl}`,{signal:sig()});
+      if(!r.ok)throw new Error("allorigins "+r.status);
+      const w=await r.json();
+      if(!w.contents)throw new Error("allorigins empty");
+      const d=JSON.parse(w.contents);
+      if(d.errorCode===403)throw new Error("BAD_KEY");
+      if(d.matches!==undefined)return parse(d);
+      throw new Error("NO_MATCHES");
+    },
+
+    // 5) htmldriven cors proxy
+    async()=>tryParse(await fetch(`https://cors.eu.org/${fullUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
+
+    // 6) 8x8.vc open proxy
+    async()=>tryParse(await fetch(`https://cors.8x8.vc/${fullUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
+
+    // 7) direct (কিছু network এ কাজ করে)
+    async()=>tryParse(await fetch(fullUrl,{headers:{"X-Auth-Token":fdKey},signal:sig()})),
   ];
 
-  const errors=[];
-  for(const fn of proxies){
+  for(const fn of attempts){
     try{
-      const r=await fn();
-      const d=await r.json();
-      if(d.matches!==undefined)return parse(d);
-      if(d.errorCode===403||String(d.message).includes("403"))throw new Error("API key সঠিক নয়");
-      if(d.errorCode===429)throw new Error("Rate limit");
-      errors.push("no matches");
+      const result=await fn();
+      if(result)return result;
     }catch(e){
-      if(e.message.includes("API key"))throw e;
-      errors.push(e.message);
+      if(e.message==="BAD_KEY")throw new Error("API key সঠিক নয়। Football-Data.org চেক করুন।");
+      if(e.message==="RATE_LIMIT")throw new Error("অনেক বেশি request। কিছুক্ষণ অপেক্ষা করুন।");
+      // অন্য error হলে পরের proxy try করো
     }
   }
-  throw new Error("ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।");
+  throw new Error("ডেটা লোড হচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।");
 }
 
 // ── Shared UI ──
