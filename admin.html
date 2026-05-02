@@ -1,484 +1,478 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>PredictIQ — Admin Panel</title>
-<script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#060a10;font-family:'Segoe UI',system-ui,sans-serif;color:#e0e6f0;min-height:100vh;-webkit-text-size-adjust:100%}
-input,button,select{font-family:inherit;font-size:inherit}
-input::placeholder{color:#334455}
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:#0a0f1a}
-::-webkit-scrollbar-thumb{background:#1a3a2a;border-radius:6px}
-@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PredictIQ Admin</title>
+    <style>
+        :root {
+            --bg: #0f0c29;
+            --card: rgba(20, 16, 50, 0.9);
+            --accent: #6c5ce7;
+            --accent2: #a78bfa;
+            --green: #4ade80;
+            --red: #f87171;
+            --gold: #fbbf24;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f0c29;
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        .a-header {
+            background: rgba(15, 12, 41, 0.95);
+            border-bottom: 2px solid var(--gold);
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .a-logo {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--gold);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 15px;
+        }
+
+        .login-box {
+            max-width: 350px;
+            margin: 60px auto;
+            background: var(--card);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 14px;
+            padding: 25px;
+        }
+
+        .login-box h2 {
+            text-align: center;
+            color: var(--gold);
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            color: #c4b5fd;
+            margin-bottom: 3px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 9px;
+            border-radius: 6px;
+            border: 1px solid rgba(108, 92, 231, 0.3);
+            background: rgba(15, 12, 41, 0.8);
+            color: #fff;
+            font-size: 12px;
+        }
+
+        .dashboard {
+            display: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid rgba(108, 92, 231, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-num {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent2);
+        }
+
+        .stat-label {
+            font-size: 9px;
+            color: #7c6fb0;
+            margin-top: 2px;
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 7px 14px;
+            border: 1px solid rgba(108, 92, 231, 0.3);
+            background: rgba(108, 92, 231, 0.1);
+            color: #c4b5fd;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .panel {
+            background: var(--card);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .provider-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 6px 0;
+            background: rgba(15, 12, 41, 0.6);
+            border-radius: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .provider-row.active-provider {
+            border: 2px solid var(--green);
+        }
+
+        .btn {
+            padding: 7px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-danger {
+            background: var(--red);
+            color: #fff;
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 10px;
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+
+        .toggle input {
+            display: none;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 22px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            content: "";
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle input:checked+.toggle-slider {
+            background: var(--green);
+        }
+
+        .toggle input:checked+.toggle-slider:before {
+            transform: translateX(18px);
+        }
+
+        .alert {
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            margin: 8px 0;
+        }
+
+        .alert-success {
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--green);
+        }
+
+        .toast {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: var(--green);
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 11px;
+            z-index: 1000;
+            animation: fadeOut 2s forwards;
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+            }
+            80% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+            }
+        }
+    </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useEffect,useRef}=React;
 
-// ── Storage Keys ──
-const ADMIN_KEY="piq_admin_v1";
-const USAGE_KEY="piq_usage_v1";
-
-// ── Obfuscate/Deobfuscate keys (basic protection) ──
-function encode(str){return btoa(unescape(encodeURIComponent(str)));}
-function decode(str){try{return decodeURIComponent(escape(atob(str)));}catch{return "";}}
-
-// ── Admin Storage ──
-function getAdminCfg(){
-  try{const s=localStorage.getItem(ADMIN_KEY);return s?JSON.parse(s):null;}catch{return null;}
-}
-function saveAdminCfg(cfg){
-  try{localStorage.setItem(ADMIN_KEY,JSON.stringify(cfg));}catch{}
-}
-
-// ── Usage Storage ──
-function getUsage(){
-  try{const s=localStorage.getItem(USAGE_KEY);return s?JSON.parse(s):{};}catch{return{};}
-}
-function saveUsage(u){
-  try{localStorage.setItem(USAGE_KEY,JSON.stringify(u));}catch{}
-}
-function logUsage(pid,success){
-  const u=getUsage();
-  const today=new Date().toISOString().slice(0,10);
-  if(!u[pid])u[pid]={total:0,errors:0,daily:{}};
-  u[pid].total=(u[pid].total||0)+1;
-  if(!success)u[pid].errors=(u[pid].errors||0)+1;
-  if(!u[pid].daily[today])u[pid].daily[today]=0;
-  u[pid].daily[today]++;
-  saveUsage(u);
-}
-
-// ── Providers config ──
-const PROVIDERS_META=[
-  {id:"groq",    name:"Groq",    icon:"⚡",color:"#f55036",badge:"FREE",ph:"gsk_...",vision:false},
-  {id:"gemini",  name:"Gemini",  icon:"🔷",color:"#4285f4",badge:"FREE",ph:"AIzaSy...",vision:true},
-  {id:"deepseek",name:"DeepSeek",icon:"🔵",color:"#4d6ef5",badge:"FREE",ph:"sk-...",vision:false},
-  {id:"kimi",    name:"Kimi",    icon:"🌙",color:"#a855f7",badge:"FREE",ph:"sk-...",vision:false},
-  {id:"openai",  name:"ChatGPT", icon:"🟩",color:"#10a37f",badge:"PAID",ph:"sk-proj-...",vision:true},
-  {id:"anthropic",name:"Claude", icon:"🟧",color:"#ff6b35",badge:"PAID",ph:"sk-ant-...",vision:true},
-];
-
-// ── Default admin config structure ──
-function defaultCfg(){
-  return{
-    password: encode("admin123"), // default password — admin should change this
-    providers: PROVIDERS_META.map((p,i)=>({
-      id:p.id,
-      key:"",
-      active:false,
-      priority: i===0?"primary":i===1?"secondary":"inactive",
-    })),
-    settings:{
-      showProviderToUser: false,
-      dailyLimitPerUser: 50,
-    }
-  };
-}
-
-// ── Shared UI ──
-function Btn({onClick,disabled,color="#00ff9d",children,full,sm,outline}){
-  return(
-    <button onClick={onClick} disabled={disabled} style={{
-      width:full?"100%":"auto",
-      background:outline?`${color}10`:disabled?`${color}15`:`linear-gradient(135deg,${color},${color}cc)`,
-      border:outline?`1px solid ${color}44`:"none",
-      borderRadius:sm?8:10,padding:sm?"8px 14px":"12px 18px",
-      cursor:disabled?"not-allowed":"pointer",
-      color:outline?color:disabled?"#334455":"#060a10",
-      fontWeight:900,fontSize:sm?12:13,
-      opacity:disabled?0.5:1,
-      transition:"all .15s",
-    }}>{children}</button>
-  );
-}
-function INP({label,value,onChange,type="text",ph,note,color="#00ff9d"}){
-  const [sh,setSh]=useState(false);
-  const isPass=type==="password";
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:5}}>
-      {label&&<label style={{color:"#8899aa",fontSize:11,fontWeight:700}}>{label}</label>}
-      <div style={{position:"relative"}}>
-        <input
-          type={isPass&&!sh?"password":"text"}
-          placeholder={ph}
-          value={value}
-          onChange={e=>onChange(e.target.value)}
-          style={{width:"100%",background:"rgba(255,255,255,0.04)",border:`1px solid ${color}22`,borderRadius:9,padding:`10px ${isPass?"40px":"12px"} 10px 12px`,color:"#e0e6f0",fontSize:12,outline:"none"}}
-        />
-        {isPass&&<button onClick={()=>setSh(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14}}>{sh?"🙈":"👁️"}</button>}
-      </div>
-      {note&&<p style={{color:"#334455",fontSize:10}}>{note}</p>}
+    <div class="a-header">
+        <span class="a-logo">⚙️ PredictIQ Admin</span>
+        <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
     </div>
-  );
-}
-function Card({children,color="#00ff9d",style={}}){
-  return(
-    <div style={{background:`rgba(255,255,255,0.02)`,border:`1px solid ${color}18`,borderRadius:14,padding:16,...style}}>
-      {children}
-    </div>
-  );
-}
-function Badge({t,c}){return <span style={{background:`${c}15`,color:c,fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20,border:`1px solid ${c}25`}}>{t}</span>;}
 
-// ── Login Screen ──
-function Login({onLogin,storedHash}){
-  const [pw,setPw]=useState("");
-  const [er,setEr]=useState("");
-  const go=()=>{
-    if(!pw){setEr("Password দিন।");return;}
-    if(encode(pw)===storedHash){onLogin();}
-    else{setEr("Password ভুল।");setPw("");}
-  };
-  return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:"#060a10"}}>
-      <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(255,77,77,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,77,77,0.012) 1px,transparent 1px)",backgroundSize:"44px 44px",pointerEvents:"none"}}/>
-      <div style={{width:"100%",maxWidth:380,zIndex:1,animation:"fadeUp .4s ease"}}>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{width:64,height:64,borderRadius:18,background:"linear-gradient(135deg,rgba(255,77,77,0.15),rgba(255,77,77,0.06))",border:"1.5px solid rgba(255,77,77,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 14px"}}>🔐</div>
-          <h1 style={{fontSize:22,fontWeight:900,color:"#fff",margin:"0 0 4px"}}>PredictIQ <span style={{color:"#ff4d4d"}}>Admin</span></h1>
-          <p style={{color:"#334455",fontSize:12}}>Secure Control Panel</p>
-        </div>
-        <Card color="#ff4d4d" style={{padding:20}}>
-          <INP label="Admin Password" value={pw} onChange={setPw} type="password" ph="Enter password..." color="#ff4d4d"/>
-          {er&&<p style={{color:"#ff6b6b",fontSize:11,marginTop:6}}>⚠️ {er}</p>}
-          <div style={{marginTop:14}}>
-            <Btn onClick={go} full color="#ff4d4d">🔐 Login</Btn>
-          </div>
-          <p style={{color:"#1a2030",fontSize:9,textAlign:"center",marginTop:10}}>Default password: admin123 — প্রথম login এর পর পরিবর্তন করুন</p>
-        </Card>
-      </div>
-    </div>
-  );
-}
+    <div class="container">
 
-// ── Provider Row ──
-function ProviderRow({p,meta,onChange}){
-  const [sh,setSh]=useState(false);
-  const hasCfg=p.key.trim().length>0;
-  const priorityColors={primary:"#00ff9d",secondary:"#ffc107",inactive:"#445566"};
-  const pc=priorityColors[p.priority]||"#445566";
-  return(
-    <div style={{background:hasCfg?"rgba(0,255,157,0.02)":"rgba(255,255,255,0.015)",border:`1.5px solid ${hasCfg?pc+"30":"rgba(255,255,255,0.04)"}`,borderRadius:12,padding:"13px 14px",transition:"all .2s"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hasCfg?12:0}}>
-        {/* Icon + Name */}
-        <div style={{width:38,height:38,borderRadius:11,background:`${meta.color}15`,border:`1px solid ${meta.color}25`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{meta.icon}</div>
-        <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{color:"#c8d8e8",fontWeight:700,fontSize:13}}>{meta.name}</span>
-            <Badge t={meta.badge} c={meta.badge==="FREE"?"#00ff9d":"#ffc107"}/>
-            {meta.vision&&<Badge t="👁 Vision" c="#a78bfa"/>}
-            {hasCfg&&<Badge t="✓ Key Set" c="#00ff9d"/>}
-          </div>
-        </div>
-        {/* Active toggle */}
-        <div onClick={()=>onChange({...p,active:!p.active})} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:38,height:20,borderRadius:20,background:p.active?"rgba(0,255,157,0.2)":"rgba(255,255,255,0.05)",border:`1px solid ${p.active?"rgba(0,255,157,0.4)":"rgba(255,255,255,0.1)"}`,position:"relative",transition:"all .2s"}}>
-            <div style={{position:"absolute",top:2,left:p.active?18:2,width:14,height:14,borderRadius:"50%",background:p.active?"#00ff9d":"#334455",transition:"all .2s",boxShadow:p.active?"0 0 6px #00ff9d88":""}}/>
-          </div>
-          <span style={{color:p.active?"#00ff9d":"#334455",fontSize:10,fontWeight:700}}>{p.active?"ON":"OFF"}</span>
-        </div>
-      </div>
-
-      {/* Key input (always shown) */}
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        <div style={{position:"relative"}}>
-          <input
-            type={sh?"text":"password"}
-            placeholder={meta.ph}
-            value={p.key}
-            onChange={e=>onChange({...p,key:e.target.value})}
-            style={{width:"100%",background:"rgba(255,255,255,0.03)",border:`1px solid ${hasCfg?pc+"30":"rgba(255,255,255,0.06)"}`,borderRadius:8,padding:"9px 38px 9px 11px",color:"#e0e6f0",fontSize:11,outline:"none"}}
-          />
-          <button onClick={()=>setSh(s=>!s)} style={{position:"absolute",right:9,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#334455"}}>{sh?"🙈":"👁️"}</button>
-        </div>
-        {hasCfg&&(
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {["primary","secondary","inactive"].map(pr=>(
-              <button key={pr} onClick={()=>onChange({...p,priority:pr})}
-                style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${p.priority===pr?priorityColors[pr]+"44":"rgba(255,255,255,0.06)"}`,background:p.priority===pr?`${priorityColors[pr]}12`:"rgba(255,255,255,0.02)",color:p.priority===pr?priorityColors[pr]:"#334455",cursor:"pointer",fontSize:10,fontWeight:700,transition:"all .15s"}}>
-                {pr==="primary"?"🥇 Primary":pr==="secondary"?"🥈 Secondary":"⏸ Inactive"}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Usage Stats ──
-function UsageStats(){
-  const u=getUsage();
-  const today=new Date().toISOString().slice(0,10);
-  const total=Object.values(u).reduce((s,v)=>s+(v.total||0),0);
-  if(total===0)return(
-    <Card style={{textAlign:"center",padding:"24px 16px"}}>
-      <div style={{fontSize:32,marginBottom:8}}>📊</div>
-      <p style={{color:"#334455",fontSize:12}}>এখনো কোনো request নেই</p>
-    </Card>
-  );
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {Object.entries(u).map(([pid,data])=>{
-        if(!data.total)return null;
-        const meta=PROVIDERS_META.find(p=>p.id===pid)||{name:pid,color:"#667788",icon:"🤖"};
-        const todayCount=data.daily?.[today]||0;
-        const errRate=data.total?Math.round((data.errors/data.total)*100):0;
-        return(
-          <div key={pid} style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${meta.color}18`,borderRadius:11,padding:"11px 13px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-              <span style={{fontSize:15}}>{meta.icon}</span>
-              <span style={{color:"#c8d8e8",fontWeight:700,fontSize:12}}>{meta.name}</span>
+        <!-- LOGIN -->
+        <div class="login-box" id="loginBox">
+            <h2>🔐 Admin Login</h2>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="adminPass" placeholder="Enter password" onkeypress="if(event.key==='Enter')login()">
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-              {[
-                {l:"Total",v:data.total,c:"#a78bfa"},
-                {l:"Today",v:todayCount,c:"#00ff9d"},
-                {l:"Error%",v:errRate+"%",c:errRate>20?"#ff4d4d":"#ffc107"},
-              ].map(s=>(
-                <div key={s.l} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"7px 6px",textAlign:"center"}}>
-                  <div style={{color:s.c,fontSize:14,fontWeight:900,fontFamily:"monospace"}}>{s.v}</div>
-                  <div style={{color:"#1a2a34",fontSize:8,fontWeight:700,marginTop:1}}>{s.l.toUpperCase()}</div>
+            <button class="btn btn-primary btn-block" onclick="login()">Login</button>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div class="dashboard" id="dashboard">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-num" id="totalPreds">0</div>
+                    <div class="stat-label">Predictions</div>
                 </div>
-              ))}
+                <div class="stat-card">
+                    <div class="stat-num" style="color:#fbbf24;" id="activeAI">-</div>
+                    <div class="stat-label">Active AI</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num" style="color:#f87171;" id="maintStatus">OFF</div>
+                    <div class="stat-label">Maintenance</div>
+                </div>
             </div>
-          </div>
-        );
-      })}
-      <button onClick={()=>{localStorage.removeItem(USAGE_KEY);window.location.reload();}}
-        style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.15)",color:"#ff6060",borderRadius:9,padding:"9px",cursor:"pointer",fontSize:11,fontWeight:700}}>
-        🗑️ Usage Data রিসেট করুন
-      </button>
-    </div>
-  );
-}
 
-// ── Main Admin Panel ──
-function AdminPanel(){
-  const [cfg,setCfg]=useState(()=>getAdminCfg()||defaultCfg());
-  const [tab,setTab]=useState("providers");
-  const [saved,setSaved]=useState(false);
-  const [newPw,setNewPw]=useState("");
-  const [newPw2,setNewPw2]=useState("");
-  const [pwMsg,setPwMsg]=useState("");
-  const [testId,setTestId]=useState(null);
-  const [testMsg,setTestMsg]=useState("");
-
-  const updateProvider=(id,updated)=>{
-    setCfg(c=>({...c,providers:c.providers.map(p=>p.id===id?updated:p)}));
-  };
-
-  const save=()=>{
-    saveAdminCfg(cfg);
-    setSaved(true);
-    setTimeout(()=>setSaved(false),2500);
-  };
-
-  const changePw=()=>{
-    if(newPw.length<4){setPwMsg("কমপক্ষে 4 character দিন।");return;}
-    if(newPw!==newPw2){setPwMsg("দুটো password মিলছে না।");return;}
-    const updated={...cfg,password:encode(newPw)};
-    setCfg(updated);
-    saveAdminCfg(updated);
-    setNewPw("");setNewPw2("");
-    setPwMsg("✅ Password পরিবর্তন হয়েছে!");
-    setTimeout(()=>setPwMsg(""),3000);
-  };
-
-  const testProvider=async(p)=>{
-    const meta=PROVIDERS_META.find(m=>m.id===p.id);
-    if(!p.key.trim()){setTestMsg("Key নেই।");return;}
-    setTestId(p.id);setTestMsg("⏳ Testing...");
-    try{
-      const prompt='Say "OK" in one word only.';
-      let result="";
-      const h={"Content-Type":"application/json","Authorization":"Bearer "+p.key};
-      if(p.id==="groq"){const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:10,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);result=d.choices[0].message.content;}
-      else if(p.id==="deepseek"){const r=await fetch("https://api.deepseek.com/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"deepseek-chat",max_tokens:10,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);result=d.choices[0].message.content;}
-      else if(p.id==="kimi"){const r=await fetch("https://api.moonshot.cn/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"moonshot-v1-8k",max_tokens:10,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);result=d.choices[0].message.content;}
-      else if(p.id==="openai"){const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"gpt-4o-mini",max_tokens:10,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);result=d.choices[0].message.content;}
-      else if(p.id==="gemini"){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${p.key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);result=d.candidates[0].content.parts[0].text;}
-      else if(p.id==="anthropic"){const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":p.key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:10,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);result=d.content[0].text;}
-      setTestMsg(`✅ ${meta.name} কাজ করছে! Response: "${result.trim().slice(0,20)}"`);
-      logUsage(p.id,true);
-    }catch(e){
-      setTestMsg(`❌ Error: ${e.message}`);
-      logUsage(p.id,false);
-    }
-    setTimeout(()=>{setTestId(null);setTestMsg("");},5000);
-  };
-
-  const activePrimary=cfg.providers.find(p=>p.active&&p.priority==="primary");
-  const activeSecondary=cfg.providers.find(p=>p.active&&p.priority==="secondary");
-  const activeCount=cfg.providers.filter(p=>p.active&&p.key).length;
-
-  const TABS=[
-    {id:"providers",icon:"🤖",label:"Providers"},
-    {id:"status",icon:"📊",label:"Usage"},
-    {id:"settings",icon:"⚙️",label:"Settings"},
-  ];
-
-  return(
-    <div style={{minHeight:"100vh",background:"#060a10"}}>
-      <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(255,77,77,0.01) 1px,transparent 1px),linear-gradient(90deg,rgba(255,77,77,0.01) 1px,transparent 1px)",backgroundSize:"44px 44px",pointerEvents:"none"}}/>
-      <div style={{position:"relative",zIndex:1,maxWidth:600,margin:"0 auto",padding:"16px 14px 60px"}}>
-
-        {/* Header */}
-        <div style={{textAlign:"center",marginBottom:18}}>
-          <div style={{display:"inline-flex",alignItems:"center",gap:10,marginBottom:6}}>
-            <div style={{width:40,height:40,borderRadius:12,background:"rgba(255,77,77,0.12)",border:"1.5px solid rgba(255,77,77,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>🔐</div>
-            <span style={{fontSize:22,fontWeight:900,color:"#fff"}}>PredictIQ <span style={{color:"#ff4d4d"}}>Admin</span></span>
-          </div>
-          <p style={{color:"#1a2a34",fontSize:11,marginBottom:10}}>AI Provider Control Panel</p>
-
-          {/* Status bar */}
-          <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:22,padding:"5px 14px",flexWrap:"wrap",justifyContent:"center",gap:10}}>
-            <span style={{color:activePrimary?"#00ff9d":"#ff4d4d",fontSize:11,fontWeight:700}}>
-              {activePrimary?`✅ Primary: ${PROVIDERS_META.find(p=>p.id===activePrimary.id)?.name}`:"❌ No Primary"}
-            </span>
-            <span style={{color:"#1a2a34"}}>|</span>
-            <span style={{color:activeSecondary?"#ffc107":"#334455",fontSize:11,fontWeight:700}}>
-              {activeSecondary?`🔄 Backup: ${PROVIDERS_META.find(p=>p.id===activeSecondary.id)?.name}`:"No Backup"}
-            </span>
-            <span style={{color:"#1a2a34"}}>|</span>
-            <span style={{color:"#a78bfa",fontSize:11,fontWeight:700}}>{activeCount} Active</span>
-          </div>
-        </div>
-
-        {/* Nav */}
-        <div style={{display:"flex",gap:3,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:12,padding:4,marginBottom:16}}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)}
-              style={{flex:1,padding:"9px 6px",borderRadius:9,border:"none",cursor:"pointer",background:tab===t.id?"rgba(255,77,77,0.12)":"transparent",color:tab===t.id?"#ff6b6b":"#2a3a44",fontWeight:tab===t.id?800:500,fontSize:11,borderBottom:tab===t.id?"2px solid #ff4d4d":"2px solid transparent",transition:"all .15s"}}>
-              <span style={{display:"block",fontSize:15,marginBottom:2}}>{t.icon}</span>{t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Providers Tab */}
-        {tab==="providers"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10,animation:"fadeUp .3s ease"}}>
-            <Card color="#ff4d4d">
-              <p style={{color:"#ff6b6b",fontWeight:800,fontSize:12,marginBottom:4}}>🔑 AI Provider Keys</p>
-              <p style={{color:"#334455",fontSize:10,lineHeight:1.6}}>Priority: <b style={{color:"#00ff9d"}}>Primary</b> = main AI · <b style={{color:"#ffc107"}}>Secondary</b> = auto-fallback if primary fails · Key save করুন তারপর index.html এ automatically কাজ করবে।</p>
-            </Card>
-
-            {cfg.providers.map(p=>{
-              const meta=PROVIDERS_META.find(m=>m.id===p.id);
-              return(
-                <div key={p.id}>
-                  <ProviderRow p={p} meta={meta} onChange={updated=>updateProvider(p.id,updated)}/>
-                  {p.key.trim()&&(
-                    <div style={{marginTop:5,display:"flex",alignItems:"center",gap:8}}>
-                      <button onClick={()=>testProvider(p)}
-                        style={{background:"rgba(59,158,255,0.08)",border:"1px solid rgba(59,158,255,0.2)",color:"#3b9eff",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:10,fontWeight:700}}>
-                        {testId===p.id?"⏳ Testing...":"🧪 Key Test করুন"}
-                      </button>
-                      {testId===p.id&&testMsg&&<span style={{color:testMsg.startsWith("✅")?"#00ff9d":"#ff6b6b",fontSize:10,flex:1}}>{testMsg}</span>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Save */}
-            <div style={{position:"sticky",bottom:10,zIndex:10}}>
-              <button onClick={save}
-                style={{width:"100%",background:saved?"linear-gradient(135deg,#00ff9d,#00cc7a)":"linear-gradient(135deg,#ff4d4d,#cc3333)",border:"none",borderRadius:11,padding:"13px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:14,boxShadow:saved?"0 4px 20px #00ff9d33":"0 4px 20px #ff4d4d33",transition:"all .3s"}}>
-                {saved?"✅ Saved! index.html এ প্রতিফলিত হবে":"💾 Save করুন"}
-              </button>
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="showTab('providers')">🤖 Providers</button>
+                <button class="tab-btn" onclick="showTab('apikeys')">🔑 API Keys</button>
+                <button class="tab-btn" onclick="showTab('settings')">⚙️ Settings</button>
             </div>
-          </div>
-        )}
 
-        {/* Usage Tab */}
-        {tab==="status"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10,animation:"fadeUp .3s ease"}}>
-            <Card color="#a78bfa">
-              <p style={{color:"#a78bfa",fontWeight:800,fontSize:12,marginBottom:4}}>📊 Usage Statistics</p>
-              <p style={{color:"#334455",fontSize:10}}>index.html থেকে যত request যাচ্ছে তার statistics</p>
-            </Card>
-            <UsageStats/>
-          </div>
-        )}
-
-        {/* Settings Tab */}
-        {tab==="settings"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10,animation:"fadeUp .3s ease"}}>
-            <Card color="#ffc107">
-              <p style={{color:"#ffc107",fontWeight:800,fontSize:12,marginBottom:12}}>⚙️ Settings</p>
-
-              {/* Password change */}
-              <div style={{marginBottom:16}}>
-                <p style={{color:"#8899aa",fontSize:11,fontWeight:700,marginBottom:8}}>🔐 Admin Password পরিবর্তন করুন</p>
-                <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                  <INP label="নতুন Password" value={newPw} onChange={setNewPw} type="password" ph="নতুন password..." color="#ffc107"/>
-                  <INP label="Confirm Password" value={newPw2} onChange={setNewPw2} type="password" ph="আবার দিন..." color="#ffc107"/>
-                  {pwMsg&&<p style={{color:pwMsg.startsWith("✅")?"#00ff9d":"#ff6b6b",fontSize:11}}>{pwMsg}</p>}
-                  <Btn onClick={changePw} color="#ffc107" sm>🔐 Password পরিবর্তন করুন</Btn>
-                </div>
-              </div>
-
-              <div style={{height:1,background:"rgba(255,255,255,0.05)",marginBottom:16}}/>
-
-              {/* Failover info */}
-              <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.08)",borderRadius:10,padding:"11px 12px"}}>
-                <p style={{color:"#00ff9d",fontWeight:700,fontSize:11,marginBottom:7}}>🔄 Auto Failover কিভাবে কাজ করে</p>
-                <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                  {["1. index.html এ user request করলে Primary AI তে যায়","2. Primary fail হলে → Secondary তে auto-switch","3. Secondary ও fail হলে → error message দেখায়","4. User কিছু বুঝতে পারে না (seamless)"].map((s,i)=>(
-                    <p key={i} style={{color:"#334455",fontSize:10,lineHeight:1.6}}>{s}</p>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{height:1,background:"rgba(255,255,255,0.05)",margin:"16px 0"}}/>
-
-              {/* Reset */}
-              <div>
-                <p style={{color:"#8899aa",fontSize:11,fontWeight:700,marginBottom:8}}>⚠️ Danger Zone</p>
-                <button onClick={()=>{if(confirm("সব config মুছে ফেলবেন?")){localStorage.removeItem(ADMIN_KEY);window.location.reload();}}}
-                  style={{background:"rgba(255,77,77,0.06)",border:"1px solid rgba(255,77,77,0.2)",color:"#ff4d4d",borderRadius:9,padding:"9px 16px",cursor:"pointer",fontSize:11,fontWeight:700}}>
-                  🗑️ সব config reset করুন
-                </button>
-              </div>
-            </Card>
-          </div>
-        )}
-
-        {/* Vision warning */}
-        <div style={{marginTop:20,background:"rgba(255,193,7,0.03)",border:"1px solid rgba(255,193,7,0.08)",borderRadius:10,padding:"10px 12px"}}>
-          <p style={{color:"#665500",fontSize:9,lineHeight:1.7}}>
-            👁️ <b style={{color:"#00ff9d"}}>Screenshot সব AI দিয়েই কাজ করে!</b><br/>
-            Gemini · ChatGPT · Claude → সরাসরি image বিশ্লেষণ (সেরা মান)<br/>
-            Groq · DeepSeek · Kimi → AI-based text extraction (ভালো মান)
-          </p>
+            <div id="tabContent" class="panel"></div>
         </div>
 
-        <p style={{textAlign:"center",marginTop:20,color:"#0e1518",fontSize:9}}>PredictIQ Admin Panel · এই URL শুধু admin জানবে</p>
-      </div>
     </div>
-  );
-}
 
-// ── Root ──
-function Root(){
-  const [logged,setLogged]=useState(false);
-  const cfg=getAdminCfg()||defaultCfg();
-  if(!logged)return <Login onLogin={()=>setLogged(true)} storedHash={cfg.password}/>;
-  return <AdminPanel/>;
-}
+    <script>
+        // ============ SETTINGS ============
+        const DEFAULT = {
+            activeProvider: 'gemini',
+            providers: {
+                gemini: { enabled: true, apiKey: '', model: 'gemini-1.5-flash' },
+                openai: { enabled: false, apiKey: '', model: 'gpt-4o' },
+                grok: { enabled: false, apiKey: '', model: 'grok-4-vision-preview' }
+            },
+            siteName: 'PredictIQ',
+            minConfidence: 60,
+            maintenanceMode: false,
+            adminPassword: 'admin123',
+            totalPredictions: 0
+        };
 
-ReactDOM.createRoot(document.getElementById('root')).render(<Root/>);
-</script>
+        function getSettings() {
+            try {
+                const s = localStorage.getItem('pq_admin_settings');
+                return s ? { ...DEFAULT, ...JSON.parse(s) } : DEFAULT;
+            } catch { return DEFAULT; }
+        }
+
+        function saveAdminSettings(data) {
+            localStorage.setItem('pq_admin_settings', JSON.stringify(data));
+        }
+
+        function toast(m) {
+            const t = document.createElement('div');
+            t.className = 'toast';
+            t.textContent = m;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 2000);
+        }
+
+        let loggedIn = sessionStorage.getItem('pq_admin_logged') === 'true';
+        if (loggedIn) showDashboard();
+
+        function login() {
+            const pass = document.getElementById('adminPass').value;
+            const settings = getSettings();
+            if (pass === settings.adminPassword) {
+                sessionStorage.setItem('pq_admin_logged', 'true');
+                loggedIn = true;
+                showDashboard();
+            } else {
+                alert('❌ Wrong password!');
+            }
+        }
+
+        function logout() {
+            sessionStorage.removeItem('pq_admin_logged');
+            loggedIn = false;
+            document.getElementById('loginBox').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
+        }
+
+        function showDashboard() {
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            updateStats();
+            showTab('providers');
+        }
+
+        function updateStats() {
+            const s = getSettings();
+            document.getElementById('totalPreds').textContent = s.totalPredictions || 0;
+            document.getElementById('activeAI').textContent = s.activeProvider.toUpperCase();
+            document.getElementById('maintStatus').textContent = s.maintenanceMode ? 'ON' : 'OFF';
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            const c = document.getElementById('tabContent');
+            const s = getSettings();
+
+            if (tab === 'providers') {
+                c.innerHTML = `
+                <h4 style="color:#a78bfa;margin-bottom:10px;">AI Providers</h4>
+                ${Object.keys(s.providers).map(k => `
+                  <div class="provider-row ${s.activeProvider===k?'active-provider':''}">
+                    <span style="text-transform:capitalize;font-weight:600;">${k}</span>
+                    <label class="toggle"><input type="checkbox" ${s.providers[k].enabled?'checked':''} onchange="toggleProvider('${k}',this.checked)"><span class="toggle-slider"></span></label>
+                    ${s.activeProvider!==k?`<button class="btn btn-primary btn-sm" onclick="activateProvider('${k}')">Activate</button>`:'<span style="color:#4ade80;font-size:10px;">ACTIVE</span>'}
+                  </div>`).join('')}`;
+            } else if (tab === 'apikeys') {
+                c.innerHTML = `
+                <h4 style="color:#a78bfa;margin-bottom:10px;">API Keys</h4>
+                ${Object.keys(s.providers).map(k => `
+                  <div class="provider-row">
+                    <span style="text-transform:capitalize;">${k}</span>
+                    <input type="password" id="key_${k}" placeholder="${s.providers[k].apiKey?'••••••••':'Enter key'}" style="flex:1;min-width:150px;padding:7px;border-radius:4px;border:1px solid rgba(108,92,231,0.3);background:rgba(15,12,41,0.8);color:#fff;font-size:11px;">
+                    <button class="btn btn-primary btn-sm" onclick="saveKey('${k}')">Save</button>
+                  </div>`).join('')}`;
+            } else if (tab === 'settings') {
+                c.innerHTML = `
+                <h4 style="color:#a78bfa;margin-bottom:10px;">Settings</h4>
+                <div class="form-group"><label>Site Name</label><input id="siteName" value="${s.siteName}"></div>
+                <div class="form-group"><label>Admin Password</label><input type="password" id="newPass" placeholder="New password (optional)"></div>
+                <div class="form-group"><label>Min Confidence (%)</label><input type="number" id="minConf" value="${s.minConfidence}" min="30" max="95"></div>
+                <div class="provider-row"><span>Maintenance Mode</span><label class="toggle"><input type="checkbox" id="maintToggle" ${s.maintenanceMode?'checked':''} onchange="toggleMaintenance(this.checked)"><span class="toggle-slider"></span></label></div>
+                <button class="btn btn-primary btn-block" onclick="saveAll()">💾 Save</button>`;
+            }
+        }
+
+        function toggleProvider(provider, enabled) {
+            const s = getSettings();
+            s.providers[provider].enabled = enabled;
+            saveAdminSettings(s);
+            toast(`${provider} ${enabled?'✅':'❌'}`);
+        }
+
+        function activateProvider(provider) {
+            const s = getSettings();
+            s.activeProvider = provider;
+            saveAdminSettings(s);
+            updateStats();
+            showTab('providers');
+            toast(`🚀 ${provider} activated!`);
+        }
+
+        function saveKey(provider) {
+            const val = document.getElementById('key_' + provider).value.trim();
+            if (!val) return alert('Enter key');
+            const s = getSettings();
+            s.providers[provider].apiKey = val;
+            saveAdminSettings(s);
+            toast(`✅ Key saved for ${provider}`);
+            document.getElementById('key_' + provider).value = '';
+            document.getElementById('key_' + provider).placeholder = '••••••••';
+        }
+
+        function toggleMaintenance(v) {
+            const s = getSettings();
+            s.maintenanceMode = v;
+            saveAdminSettings(s);
+            updateStats();
+            toast(v ? '🛑 Maintenance ON' : '✅ OFF');
+        }
+
+        function saveAll() {
+            const s = getSettings();
+            const sn = document.getElementById('siteName')?.value;
+            const np = document.getElementById('newPass')?.value;
+            const mc = document.getElementById('minConf')?.value;
+            if (sn) s.siteName = sn;
+            if (np) s.adminPassword = np;
+            if (mc) s.minConfidence = parseInt(mc);
+            saveAdminSettings(s);
+            updateStats();
+            toast('✅ Saved!');
+        }
+    </script>
 </body>
 </html>
