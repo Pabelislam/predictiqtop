@@ -121,6 +121,13 @@ function canPredict(){
 
 const ADMIN_KEY="piq_admin_v1";
 const USAGE_KEY="piq_usage_v1";
+const PLAN_KEY="piq_plan_cfg_v1";
+const KEYS_KEY="piq_lic_keys_v1";
+const USER_PLAN_KEY="piq_user_plan_v1";
+function getPlanCfg(){try{const s=localStorage.getItem(PLAN_KEY);return s?JSON.parse(s):null;}catch{return null;}}
+function getLicKeys(){try{const s=localStorage.getItem(KEYS_KEY);return s?JSON.parse(s):[];}catch{return[];}}
+function getUserPlan(){try{const s=localStorage.getItem(USER_PLAN_KEY);return s?JSON.parse(s):null;}catch{return null;}}
+function saveUserPlan(p){try{localStorage.setItem(USER_PLAN_KEY,JSON.stringify(p));}catch{}}
 
 function decode(str){try{return decodeURIComponent(escape(atob(str)));}catch{return "";}}
 
@@ -221,9 +228,7 @@ function oddsToProb(o){const n=parseFloat(o);if(!n||n<=1)return 50;return Math.r
 function combinedProb(arr){if(!arr.length)return 0;return Math.round(arr.reduce((p,m)=>p*(m.prob/100),1)*10000)/100;}
 function slipRisk(p){if(p>=55)return{level:"Low",color:"#00ff9d",icon:"🟢"};if(p>=30)return{level:"Medium",color:"#ffc107",icon:"🟡"};if(p>=15)return{level:"High",color:"#ff8800",icon:"🔴"};return{level:"Very High",color:"#ff4d4d",icon:"🚨"};}
 async function f2b(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(f);});}
-function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"),e=c.lastIndexOf("}");if(s<0||e<0)throw new Error("JSON error");const j=c.slice(s,e+1);try{return JSON.parse(j);}catch(){let f="",n=j.length;for(let i=0;i<n;i++){if(j[i]===","){let k=i+1;while(k<n&&" 
-
-	".indexOf(j[k])>=0)k++;if(j[k]==="]"||j[k]==="}") continue;}f+=j[i];}try{return JSON.parse(f);}catch{return {winProb:65,confidence:70,riskLevel:"Medium",predictions:[],sport:"Football",league:"Unknown",analysis:"Parse error"};}}}
+function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"),e=c.lastIndexOf("}");if(s<0||e<0)throw new Error("JSON error");return JSON.parse(c.slice(s,e+1));}
 function pa(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("["),e=c.lastIndexOf("]");if(s<0||e<0)throw new Error("Array error");return JSON.parse(c.slice(s,e+1));}
 
 // BD Timezone
@@ -563,8 +568,7 @@ function NoConfig(){
           <p style={{color:"#ffc107",fontWeight:800,fontSize:13,marginBottom:8}}>⚠️ AI এখনো সেট হয়নি</p>
           <p style={{color:"#445566",fontSize:12,lineHeight:1.7}}>Admin panel এ login করে AI Provider সেট করুন। তারপর এই পেজ reload করুন।</p>
         </div>
-        <a href="admin.html" style={{display:"block",background:"linear-gradient(135deg,#ffc107,#e6ac00)",border:"none",borderRadius:12,padding:"13px",color:"#000",fontWeight:900,fontSize:14,textDecoration:"none",textAlign:"center",marginBottom:10}}>⚙️ Admin Panel খুলুন</a>
-        <p style={{color:"#1a2a34",fontSize:10}}>Login → AI Provider যোগ করুন → Save → এই পেজ Reload করুন</p>
+        <p style={{color:"#1a2a34",fontSize:10}}>admin.html → Login → Provider যোগ করুন → Save</p>
       </div>
     </div>
   );
@@ -852,7 +856,6 @@ function SlipTab(){
 // ─────────────────────────────
 // ── Main App ──
 // ─────────────────────────────
-
 function App(){
   const {primary,secondary}=getActiveProviders();
   const hasConfig=primary||secondary;
@@ -941,6 +944,7 @@ function App(){
   const BP=(d)=>({background:d?`${pc}0d`:`linear-gradient(135deg,${pc},${pc}cc)`,border:"none",borderRadius:11,padding:"13px",cursor:d?"not-allowed":"pointer",color:d?"#2a3a44":"#fff",fontWeight:900,fontSize:15,width:"100%",opacity:d?0.6:1,boxShadow:d?"none":`0 4px 18px ${pc}25`});
 
   const TABS=[
+    
     {id:"upload",icon:"📸",label:"Screenshot"},
     {id:"manual",icon:"✏️",label:"Manual"},
     {id:"slip",icon:"📊",label:"BetSlip",hc:"#ffc107"},
@@ -960,11 +964,22 @@ function App(){
             <span style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></span>
           </div>
           <p style={{color:"#2a3a44",fontSize:12,marginBottom:8}}>AI Prediction · Live Fixtures · BetSlip Risk · Multi-Bet</p>
-          {/* Provider indicator — name only, no key */}
-          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:`${pc}0a`,border:`1px solid ${pc}18`,borderRadius:22,padding:"5px 14px"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:`${pc}0a`,border:`1px solid ${pc}18`,borderRadius:22,padding:"5px 14px",marginBottom:8}}>
             <span style={{fontSize:14}}>{activeMeta?.icon||"⚡"}</span>
             <span style={{color:pc,fontSize:12,fontWeight:700}}>{activeMeta?.name||"AI"} Powered</span>
             {secondary&&<span style={{color:"#334455",fontSize:10}}>+ Backup</span>}
+          </div>
+          <div style={{display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}}>
+            {prem?(
+              <div onClick={()=>setShowManage(true)} style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,193,7,0.08)",border:"1px solid rgba(255,193,7,0.25)",borderRadius:20,padding:"5px 13px",cursor:"pointer"}}>
+                <span>⭐</span><span style={{color:"#ffc107",fontSize:12,fontWeight:800}}>Premium Active</span>
+              </div>
+            ):(
+              <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:20,padding:"5px 13px"}}>
+                <span style={{color:"#445566",fontSize:11}}>🆓 Free · {usedToday||0}/{dayLimit||3} today</span>
+                <button onClick={()=>setShowUpgrade(true)} style={{background:"rgba(255,193,7,0.12)",border:"1px solid rgba(255,193,7,0.3)",borderRadius:14,padding:"3px 10px",color:"#ffc107",fontSize:10,fontWeight:800,cursor:"pointer"}}>⭐ Upgrade</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -981,7 +996,7 @@ function App(){
         {/* Fixtures */}
 
         {/* Screenshot */}
-        {{tab==="upload"&&<div style={{display:"flex",flexDirection:"column",gap:11}}>
+        {tab==="upload"&&<div style={{display:"flex",flexDirection:"column",gap:11}}>
           <div onClick={()=>!load&&fRef.current?.click()} onDrop={e=>{e.preventDefault();setDrag(false);pf(e.dataTransfer.files[0]);}} onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
             style={{border:`2px dashed ${drag?pc:prev?pc+"33":"rgba(255,255,255,0.05)"}`,borderRadius:13,padding:"28px 16px",textAlign:"center",cursor:"pointer",background:drag?`${pc}05`:prev?`${pc}02`:"rgba(255,255,255,0.01)"}}>
             <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>pf(e.target.files[0])}/>
