@@ -37,88 +37,6 @@ const {useState,useRef,useEffect,useCallback}=React;
 // ─────────────────────────────────────────
 // ── Admin Config Reader (no key exposure) ──
 // ─────────────────────────────────────────
-
-// ─────────────────────────────────────
-// ── PLAN SYSTEM ──
-// ─────────────────────────────────────
-const PLAN_KEY    ="piq_plan_cfg_v1";
-const KEYS_KEY    ="piq_license_keys_v1";
-const USER_KEY    ="piq_user_plan_v1";
-const USAGE_TODAY ="piq_usage_today_v1";
-
-const getPlanCfg=()=>{try{const s=localStorage.getItem(PLAN_KEY);return s?JSON.parse(s):null;}catch{return null;}};
-const getLicKeys=()=>{try{const s=localStorage.getItem(KEYS_KEY);return s?JSON.parse(s):[];}catch{return[];}};
-const getUserPlan=()=>{try{const s=localStorage.getItem(USER_KEY);return s?JSON.parse(s):null;}catch{return null;}};
-const saveUserPlan=(p)=>{try{localStorage.setItem(USER_KEY,JSON.stringify(p));}catch{}};
-
-function defaultPlanCfg(){
-  return{
-    free:{dailyLimit:3,screenshotEnabled:true,adsEnabled:false,aiLevel:"basic",arbitrage:false,oddsComparison:false},
-    premium:{dailyLimit:999,unlimited:true,screenshotEnabled:true,adsEnabled:false,aiLevel:"advanced",arbitrage:true,oddsComparison:true,priorityProcessing:true},
-    pricing:{currency:"BDT",weekly:99,monthly:299,lifetime:999,weeklyUSD:1,monthlyUSD:3,lifetimeUSD:10},
-    payment:{bkash:"",nagad:"",rocket:"",stripeLink:"",paypalLink:"",instructions:""},
-  };
-}
-
-// Check if user is premium & not expired
-function isPremium(){
-  const up=getUserPlan();
-  if(!up||!up.premium)return false;
-  if(up.type==="lifetime")return true;
-  if(!up.expiresAt)return false;
-  return new Date(up.expiresAt)>new Date();
-}
-
-// Activate a license key — returns {ok, msg, plan}
-function activateKey(inputKey){
-  const keys=getLicKeys();
-  const trimmed=inputKey.trim().toUpperCase();
-  const found=keys.findIndex(k=>k.key===trimmed&&k.active&&!k.usedBy);
-  if(found<0){
-    // check if already used by this device
-    const used=keys.find(k=>k.key===trimmed&&k.usedBy==="this_device");
-    if(used)return{ok:false,msg:"এই key আগে এই device এ ব্যবহার হয়েছে।"};
-    return{ok:false,msg:"Key পাওয়া যায়নি বা expired।"};
-  }
-  const k=keys[found];
-  // mark key as used
-  const updated=keys.map((kk,i)=>i===found?{...kk,usedBy:"this_device",usedAt:new Date().toISOString()}:kk);
-  localStorage.setItem(KEYS_KEY,JSON.stringify(updated));
-  // set expiry
-  const now=new Date();
-  let expiresAt=null;
-  if(k.type==="weekly"){const d=new Date(now);d.setDate(d.getDate()+7);expiresAt=d.toISOString();}
-  else if(k.type==="monthly"){const d=new Date(now);d.setDate(d.getDate()+30);expiresAt=d.toISOString();}
-  const plan={premium:true,type:k.type,activatedAt:now.toISOString(),expiresAt,key:trimmed};
-  saveUserPlan(plan);
-  return{ok:true,msg:`✅ ${k.type==="lifetime"?"Lifetime":k.type==="monthly"?"Monthly (30 days)":"Weekly (7 days)"} Premium activated!`,plan};
-}
-
-// Today's usage count
-function getTodayCount(){
-  try{
-    const s=localStorage.getItem(USAGE_TODAY);
-    const d=s?JSON.parse(s):{};
-    const today=new Date().toISOString().slice(0,10);
-    return d.date===today?d.count:0;
-  }catch{return 0;}
-}
-function incTodayCount(){
-  try{
-    const today=new Date().toISOString().slice(0,10);
-    const d={date:today,count:getTodayCount()+1};
-    localStorage.setItem(USAGE_TODAY,JSON.stringify(d));
-  }catch{}
-}
-function canPredict(){
-  if(isPremium())return{ok:true};
-  const cfg=getPlanCfg()||defaultPlanCfg();
-  const limit=cfg.free.dailyLimit;
-  const used=getTodayCount();
-  if(used>=limit)return{ok:false,used,limit};
-  return{ok:true,used,limit};
-}
-
 const ADMIN_KEY="piq_admin_v1";
 const USAGE_KEY="piq_usage_v1";
 
@@ -225,6 +143,11 @@ function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"
 function pa(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("["),e=c.lastIndexOf("]");if(s<0||e<0)throw new Error("Array error");return JSON.parse(c.slice(s,e+1));}
 
 // BD Timezone
+function toBDDateStr(offsetDays=0){const d=new Date(Date.now()+(6*3600000)+(offsetDays*86400000));return d.toISOString().split("T")[0];}
+function fmtTimeBD(utcStr){const d=new Date(new Date(utcStr).getTime()+(6*3600000));const h=d.getUTCHours(),m=d.getUTCMinutes();return `${h%12||12}:${String(m).padStart(2,"0")} ${h>=12?"PM":"AM"}`;}
+function fmtDateBD(utcStr){const d=new Date(new Date(utcStr).getTime()+(6*3600000));const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return `${days[d.getUTCDay()]}, ${months[d.getUTCMonth()]} ${d.getUTCDate()}`;}
+function isTodayBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(0);}
+function isTomorrowBD(utcStr){return new Date(new Date(utcStr).getTime()+(6*3600000)).toISOString().split("T")[0]===toBDDateStr(1);}
 
 // ─────────────────────────────
 // ── AI API with Auto-Failover ──
@@ -266,77 +189,24 @@ async function ai(prompt){
   }
 }
 
-// Vision — works with ANY connected AI
-// Vision-capable (Gemini/OpenAI/Claude): sends image directly
-// Non-vision (Groq/DeepSeek/Kimi): uses browser OCR then sends text to AI
-async function ocrImage(b64,mime){
-  return new Promise((resolve)=>{
-    const img=new Image();
-    img.onload=()=>{
-      const canvas=document.createElement("canvas");
-      canvas.width=img.width;canvas.height=img.height;
-      const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0);
-      // Simple canvas-based text extraction hint — we pass dimensions+data URI for AI prompt
-      resolve(`Image size: ${img.width}x${img.height}px. This is a sports betting screenshot.`);
-    };
-    img.src=`data:${mime};base64,${b64}`;
-  });
-}
-
+// Vision with failover — picks vision-capable provider
 async function visionAI(b64,mime,prompt){
   const {primary,secondary}=getActiveProviders();
   const providers=[primary,secondary].filter(Boolean);
-  if(!providers.length)throw new Error("কোনো AI সেট নেই। Admin panel এ যোগাযোগ করুন।");
+  const visionOk=providers.filter(p=>PROVIDERS_META[p.id]?.vision);
+  if(!visionOk.length)throw new Error("Screenshot এর জন্য Gemini, ChatGPT বা Claude দরকার। Admin panel এ সেট করুন।");
 
-  // Try vision-capable providers first (best quality)
-  const visionProviders=providers.filter(p=>PROVIDERS_META[p.id]?.vision);
-  for(const p of visionProviders){
+  for(const p of visionOk){
     try{
       let res;
       if(p.id==="gemini"){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${p.key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);res=d.candidates[0].content.parts[0].text;}
       else if(p.id==="openai"){const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+p.key},body:JSON.stringify({model:"gpt-4o",max_tokens:1200,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);res=d.choices[0].message.content;}
       else if(p.id==="anthropic"){const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":p.key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime,data:b64}},{type:"text",text:prompt}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);res=d.content[0].text;}
-      logUsage(p.id,true);return res;
+      logUsage(p.id,true);
+      return res;
     }catch(e){logUsage(p.id,false);}
   }
-
-  // Fallback: non-vision providers (Groq/DeepSeek/Kimi) — use img2canvas OCR hint
-  const textProviders=providers.filter(p=>!PROVIDERS_META[p.id]?.vision);
-  for(const p of textProviders){
-    try{
-      // Convert image to canvas and extract pixel-based text hint
-      const ocrHint=await new Promise((resolve)=>{
-        const img=new Image();
-        img.onload=()=>{
-          const canvas=document.createElement("canvas");
-          const scale=Math.min(1,800/Math.max(img.width,img.height));
-          canvas.width=img.width*scale;canvas.height=img.height*scale;
-          const ctx=canvas.getContext("2d");
-          ctx.drawImage(img,0,0,canvas.width,canvas.height);
-          // Extract text regions by scanning for dark/light contrast areas
-          resolve(`Betting app screenshot (${img.width}x${img.height}px). Extract all match data visible.`);
-        };
-        img.src=`data:${mime};base64,${b64}`;
-        img.onerror=()=>resolve("Betting screenshot");
-      });
-      const textPrompt=`You are analyzing a sports betting app screenshot. ${ocrHint}
-
-Based on common betting app layouts, this screenshot likely contains football/soccer matches with team names and odds.
-
-Please extract ALL visible matches from this betting screenshot. Common patterns:
-- Team names are usually on left and right sides
-- Odds appear as numbers like 1.85, 2.10, 3.50
-- Match time or date may be shown
-
-Respond ONLY as a JSON array, no markdown:
-[{"teamA":"<home team>","teamB":"<away team>","sport":"Football","league":"<league if visible>","rawOdds":"<odds if visible>"}]
-
-If you cannot determine exact teams, use reasonable football team names. Return at least the structure.`;
-      const txt=await callAI(p.id,p.key,textPrompt);
-      logUsage(p.id,true);return txt;
-    }catch(e){logUsage(p.id,false);}
-  }
-  throw new Error("Screenshot বিশ্লেষণ ব্যর্থ হয়েছে। অন্য AI try করুন।");
+  throw new Error("Screenshot বিশ্লেষণ ব্যর্থ হয়েছে।");
 }
 
 async function predMatch(m){
@@ -351,203 +221,6 @@ async function predSlip(matches){
 }
 
 // ─────────────────────────────
-
-// ─────────────────────────────────────
-// ── PLAN UI COMPONENTS ──
-// ─────────────────────────────────────
-
-// Top banner showing plan status
-function PlanBanner({planCfg,onUpgrade,onManage}){
-  const prem=isPremium();
-  const up=getUserPlan();
-  const {ok,used,limit}=canPredict();
-  const left=prem?null:(limit-(used||0));
-  const expiresIn=up?.expiresAt?Math.ceil((new Date(up.expiresAt)-new Date())/(1000*60*60*24)):null;
-  if(prem){
-    const typeLabel=up?.type==="lifetime"?"♾️ Lifetime":up?.type==="monthly"?"📆 Monthly":"📅 Weekly";
-    return(
-      <div style={{background:"linear-gradient(135deg,rgba(255,193,7,0.08),rgba(255,193,7,0.03))",border:"1px solid rgba(255,193,7,0.2)",borderRadius:12,padding:"9px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:16}}>⭐</span>
-          <div>
-            <p style={{color:"#ffc107",fontWeight:800,fontSize:12,margin:0}}>Premium Active {typeLabel}</p>
-            {expiresIn!==null&&<p style={{color:"#664400",fontSize:9,margin:0}}>{expiresIn} দিন বাকি</p>}
-            {expiresIn===null&&<p style={{color:"#664400",fontSize:9,margin:0}}>Unlimited · Ad-free</p>}
-          </div>
-        </div>
-        <button onClick={onManage} style={{background:"rgba(255,193,7,0.1)",border:"1px solid rgba(255,193,7,0.25)",color:"#ffc107",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>Manage</button>
-      </div>
-    );
-  }
-  return(
-    <div style={{background:ok?"rgba(59,158,255,0.05)":"rgba(255,77,77,0.05)",border:`1px solid ${ok?"rgba(59,158,255,0.15)":"rgba(255,77,77,0.2)"}`,borderRadius:12,padding:"9px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:15}}>{ok?"🆓":"🚫"}</span>
-        <div>
-          <p style={{color:ok?"#3b9eff":"#ff6b6b",fontWeight:800,fontSize:12,margin:0}}>{ok?`Free Plan — ${left} prediction বাকি`:"আজকের limit শেষ!"}</p>
-          <p style={{color:"#334455",fontSize:9,margin:0}}>{ok?`${used||0}/${limit} ব্যবহার হয়েছে`:"Premium upgrade করুন unlimited এর জন্য"}</p>
-        </div>
-      </div>
-      <button onClick={onUpgrade} style={{background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",color:"#060a10",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:10,fontWeight:900}}>⭐ Upgrade</button>
-    </div>
-  );
-}
-
-// Upgrade / Payment modal
-function UpgradeModal({onClose,onActivate}){
-  const planCfg=getPlanCfg()||defaultPlanCfg();
-  const p=planCfg.pricing;const pay=planCfg.payment;
-  const [tab,setTab]=useState("plans");
-  const [licKey,setLicKey]=useState("");
-  const [msg,setMsg]=useState("");
-  const [msgC,setMsgC]=useState("#ff6b6b");
-  const doActivate=()=>{
-    if(!licKey.trim()){setMsg("Key দিন।");setMsgC("#ff6b6b");return;}
-    const res=activateKey(licKey);
-    setMsg(res.msg);setMsgC(res.ok?"#00ff9d":"#ff6b6b");
-    if(res.ok){setTimeout(()=>{onActivate&&onActivate();onClose();},1500);}
-  };
-  const showBDT=p.currency==="BDT"||p.currency==="BOTH";
-  const showUSD=p.currency==="USD"||p.currency==="BOTH";
-  const plans=[
-    {l:"Weekly",bdt:p.weekly,usd:p.weeklyUSD,c:"#3b9eff",icon:"📅",note:"7 দিন"},
-    {l:"Monthly",bdt:p.monthly,usd:p.monthlyUSD,c:"#00ff9d",icon:"📆",note:"30 দিন",popular:true},
-    {l:"Lifetime",bdt:p.lifetime,usd:p.lifetimeUSD,c:"#ffc107",icon:"♾️",note:"চিরজীবন"},
-  ];
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{width:"100%",maxWidth:480,background:"#0a0f1a",borderRadius:"20px 20px 0 0",border:"1px solid rgba(255,193,7,0.2)",padding:"20px 18px 36px",animation:"fadeUp .3s ease",maxHeight:"92vh",overflowY:"auto"}}>
-        {/* Handle */}
-        <div style={{width:40,height:4,background:"rgba(255,255,255,0.1)",borderRadius:4,margin:"0 auto 16px"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div>
-            <h2 style={{color:"#fff",fontSize:18,fontWeight:900,margin:0}}>⭐ Premium <span style={{color:"#ffc107"}}>Upgrade</span></h2>
-            <p style={{color:"#334455",fontSize:11,margin:0}}>Unlimited predictions · No ads · Advanced AI</p>
-          </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",color:"#667788",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:13}}>✕</button>
-        </div>
-
-        {/* Tabs */}
-        <div style={{display:"flex",gap:4,background:"rgba(255,255,255,0.03)",borderRadius:11,padding:4,marginBottom:14}}>
-          {[{id:"plans",l:"💰 Plans"},{id:"pay",l:"💳 Payment"},{id:"activate",l:"🔑 Activate"}].map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"9px 4px",borderRadius:8,border:"none",cursor:"pointer",background:tab===t.id?"rgba(255,193,7,0.15)":"transparent",color:tab===t.id?"#ffc107":"#334455",fontWeight:tab===t.id?800:500,fontSize:11,transition:"all .15s"}}>{t.l}</button>
-          ))}
-        </div>
-
-        {/* Plans Tab */}
-        {tab==="plans"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{display:"flex",flexDirection:"column",gap:7}}>
-              {["🔓 Unlimited predictions daily","📸 Screenshot analysis","🤖 Advanced AI analysis","🔍 Arbitrage detection","📊 Odds comparison","⚡ Priority processing","🚫 No ads"].map(f=>(
-                <div key={f} style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{color:"#00ff9d",fontSize:12}}>✅</span>
-                  <span style={{color:"#8899aa",fontSize:12}}>{f}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:4}}>
-              {plans.map(pl=>(
-                <div key={pl.l} style={{background:pl.popular?"rgba(0,255,157,0.04)":"rgba(255,255,255,0.02)",border:`1.5px solid ${pl.popular?"rgba(0,255,157,0.2)":"rgba(255,255,255,0.06)"}`,borderRadius:12,padding:"12px 14px",position:"relative"}}>
-                  {pl.popular&&<span style={{position:"absolute",top:-8,right:12,background:"linear-gradient(90deg,#00ff9d,#00cc7a)",color:"#040e08",fontSize:8,fontWeight:900,padding:"2px 9px",borderRadius:20}}>POPULAR</span>}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div><p style={{color:"#c8d8e8",fontWeight:800,fontSize:13,margin:"0 0 2px"}}>{pl.icon} {pl.l}</p><p style={{color:"#334455",fontSize:10,margin:0}}>{pl.note}</p></div>
-                    <div style={{textAlign:"right"}}>
-                      {showBDT&&<p style={{color:pl.c,fontWeight:900,fontSize:16,fontFamily:"monospace",margin:0}}>৳{pl.bdt}</p>}
-                      {showUSD&&<p style={{color:pl.c,fontWeight:900,fontSize:showBDT?12:16,fontFamily:"monospace",margin:0}}>${pl.usd}</p>}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button onClick={()=>setTab("pay")} style={{width:"100%",marginTop:4,background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",borderRadius:11,padding:"13px",cursor:"pointer",color:"#060a10",fontWeight:900,fontSize:14}}>💳 Payment করুন →</button>
-          </div>
-        )}
-
-        {/* Payment Tab */}
-        {tab==="pay"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <p style={{color:"#8899aa",fontSize:11,fontWeight:700,marginBottom:4}}>Payment Methods</p>
-            {[
-              {l:"💗 bKash",v:pay.bkash,c:"#ff4d9e"},
-              {l:"🟠 Nagad",v:pay.nagad,c:"#f7941d"},
-              {l:"🟣 Rocket",v:pay.rocket,c:"#8b3fc8"},
-            ].filter(m=>m.v).map(m=>(
-              <div key={m.l} style={{background:`${m.c}08`,border:`1px solid ${m.c}20`,borderRadius:11,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div><p style={{color:m.c,fontWeight:800,fontSize:12,margin:0}}>{m.l}</p><p style={{color:"#c8d8e8",fontSize:14,fontWeight:900,fontFamily:"monospace",margin:"4px 0 0"}}>{m.v}</p></div>
-                <button onClick={()=>{navigator.clipboard?.writeText(m.v);}} style={{background:`${m.c}10`,border:`1px solid ${m.c}25`,color:m.c,borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:10,fontWeight:700}}>📋 Copy</button>
-              </div>
-            ))}
-            {pay.stripeLink&&<a href={pay.stripeLink} target="_blank" rel="noreferrer" style={{display:"block",width:"100%",background:"linear-gradient(135deg,#635bff,#4f46e5)",border:"none",borderRadius:11,padding:"12px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:13,textAlign:"center",textDecoration:"none"}}>💳 Pay with Stripe →</a>}
-            {pay.paypalLink&&<a href={pay.paypalLink} target="_blank" rel="noreferrer" style={{display:"block",width:"100%",background:"linear-gradient(135deg,#003087,#0050b3)",border:"none",borderRadius:11,padding:"12px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:13,textAlign:"center",textDecoration:"none"}}>🔵 Pay with PayPal →</a>}
-            {pay.instructions&&<div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:11,padding:"12px 14px"}}><p style={{color:"#ffc107",fontWeight:700,fontSize:11,marginBottom:5}}>📋 Instructions:</p><p style={{color:"#8899aa",fontSize:11,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{pay.instructions}</p></div>}
-            {!pay.bkash&&!pay.nagad&&!pay.rocket&&!pay.stripeLink&&!pay.paypalLink&&<div style={{textAlign:"center",padding:"24px",color:"#334455",fontSize:12}}>⚙️ Admin এখনো payment method সেট করেননি।</div>}
-            <button onClick={()=>setTab("activate")} style={{width:"100%",background:"linear-gradient(135deg,#00ff9d,#00cc7a)",border:"none",borderRadius:11,padding:"13px",cursor:"pointer",color:"#040e08",fontWeight:900,fontSize:14}}>🔑 Key Activate করুন →</button>
-          </div>
-        )}
-
-        {/* Activate Tab */}
-        {tab==="activate"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.1)",borderRadius:11,padding:"13px 14px"}}>
-              <p style={{color:"#00ff9d",fontWeight:800,fontSize:12,marginBottom:6}}>🔑 License Key Activate করুন</p>
-              <p style={{color:"#334455",fontSize:11,lineHeight:1.7}}>Payment করার পর admin আপনাকে একটি key পাঠাবে। সেই key নিচে দিন।</p>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <input value={licKey} onChange={e=>setLicKey(e.target.value.toUpperCase())} placeholder="PIQ-W-XXXX-XXXX-XXXX" onKeyDown={e=>e.key==="Enter"&&doActivate()}
-                style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(0,255,157,0.2)",borderRadius:9,padding:"12px 13px",color:"#00ff9d",fontWeight:800,fontSize:13,outline:"none",letterSpacing:1,fontFamily:"monospace"}}/>
-              {msg&&<p style={{color:msgC,fontSize:12,fontWeight:700,textAlign:"center"}}>{msg}</p>}
-              <button onClick={doActivate} style={{width:"100%",background:"linear-gradient(135deg,#00ff9d,#00cc7a)",border:"none",borderRadius:11,padding:"13px",cursor:"pointer",color:"#040e08",fontWeight:900,fontSize:14}}>✅ Activate করুন</button>
-            </div>
-            <div style={{background:"rgba(255,193,7,0.03)",border:"1px solid rgba(255,193,7,0.1)",borderRadius:10,padding:"10px 12px"}}>
-              <p style={{color:"#664400",fontSize:10,lineHeight:1.7}}>💡 Key format: <span style={{color:"#ffc107",fontFamily:"monospace"}}>PIQ-W/M/L-XXXX-XXXX-XXXX</span><br/>W=Weekly, M=Monthly, L=Lifetime</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Premium manage modal (for already premium users)
-function ManageModal({onClose}){
-  const up=getUserPlan();
-  const [confirm,setConfirm]=useState(false);
-  const revoke=()=>{saveUserPlan(null);onClose();window.location.reload();};
-  const expiresIn=up?.expiresAt?Math.ceil((new Date(up.expiresAt)-new Date())/(1000*60*60*24)):null;
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{width:"100%",maxWidth:360,background:"#0a0f1a",borderRadius:20,border:"1px solid rgba(255,193,7,0.2)",padding:"24px 20px",animation:"fadeUp .3s ease"}}>
-        <div style={{textAlign:"center",marginBottom:18}}>
-          <div style={{fontSize:40,marginBottom:8}}>⭐</div>
-          <h2 style={{color:"#ffc107",fontSize:18,fontWeight:900,margin:"0 0 4px"}}>Premium Active</h2>
-          <p style={{color:"#334455",fontSize:12}}>Type: {up?.type==="lifetime"?"Lifetime ♾️":up?.type==="monthly"?"Monthly 📆":"Weekly 📅"}</p>
-          {expiresIn!==null&&<p style={{color:"#00ff9d",fontSize:12,fontWeight:700,marginTop:4}}>{expiresIn} দিন বাকি</p>}
-          {up?.activatedAt&&<p style={{color:"#1a2a34",fontSize:10,marginTop:4}}>Activated: {up.activatedAt.slice(0,10)}</p>}
-        </div>
-        <button onClick={onClose} style={{width:"100%",marginBottom:8,background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",borderRadius:10,padding:"12px",cursor:"pointer",color:"#060a10",fontWeight:900,fontSize:13}}>✅ Close</button>
-        {!confirm?<button onClick={()=>setConfirm(true)} style={{width:"100%",background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.15)",color:"#ff6060",borderRadius:10,padding:"10px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️ Plan Remove করুন</button>
-        :<div style={{display:"flex",gap:7}}><button onClick={revoke} style={{flex:1,background:"rgba(255,77,77,0.1)",border:"1px solid rgba(255,77,77,0.25)",color:"#ff4d4d",borderRadius:9,padding:"10px",cursor:"pointer",fontWeight:800,fontSize:12}}>হ্যাঁ, Remove</button><button onClick={()=>setConfirm(false)} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#667788",borderRadius:9,padding:"10px",cursor:"pointer",fontSize:12}}>বাতিল</button></div>}
-      </div>
-    </div>
-  );
-}
-
-// Limit reached overlay
-function LimitReached({onUpgrade,planCfg}){
-  const cfg=planCfg||defaultPlanCfg();
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{width:"100%",maxWidth:340,background:"#0a0f1a",borderRadius:20,border:"1px solid rgba(255,77,77,0.25)",padding:"28px 22px",textAlign:"center",animation:"fadeUp .3s ease"}}>
-        <div style={{fontSize:48,marginBottom:12}}>🚫</div>
-        <h2 style={{color:"#ff6b6b",fontSize:18,fontWeight:900,margin:"0 0 8px"}}>Daily Limit শেষ!</h2>
-        <p style={{color:"#445566",fontSize:12,lineHeight:1.8,marginBottom:16}}>আজকের free prediction limit ({cfg.free.dailyLimit}টি) শেষ হয়েছে। কাল আবার পাবেন, অথবা Premium upgrade করুন unlimited এর জন্য।</p>
-        <button onClick={onUpgrade} style={{width:"100%",background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",borderRadius:11,padding:"14px",cursor:"pointer",color:"#060a10",fontWeight:900,fontSize:15,marginBottom:8}}>⭐ Premium Upgrade করুন</button>
-        <p style={{color:"#1a2a34",fontSize:10}}>কাল midnight (BD) তে reset হবে</p>
-      </div>
-    </div>
-  );
-}
-
 // ── No Config Screen ──
 // ─────────────────────────────
 function NoConfig(){
@@ -610,6 +283,166 @@ function MCard({r,idx,onAdd,pc}){
 // ─────────────────────────────
 // ── Fixtures Tab ──
 // ─────────────────────────────
+const FD_KEY_LS="fdkey";
+const getFdKey=()=>localStorage.getItem(FD_KEY_LS)||"";
+const saveFdKey=(k)=>localStorage.setItem(FD_KEY_LS,k);
+
+const FDLEAGUES=[
+  {id:"PL",name:"Premier League",flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},{id:"PD",name:"La Liga",flag:"🇪🇸"},
+  {id:"BL1",name:"Bundesliga",flag:"🇩🇪"},{id:"SA",name:"Serie A",flag:"🇮🇹"},
+  {id:"FL1",name:"Ligue 1",flag:"🇫🇷"},{id:"CL",name:"Champions League",flag:"🌍"},
+  {id:"PPL",name:"Primeira Liga",flag:"🇵🇹"},{id:"DED",name:"Eredivisie",flag:"🇳🇱"},
+  {id:"BSA",name:"Brasileirão",flag:"🇧🇷"},
+];
+
+async function fetchFD(fdKey,league,from,to){
+  const parse=(d)=>(d.matches||[]).map(m=>({id:m.id,home:m.homeTeam?.shortName||m.homeTeam?.name||"Home",away:m.awayTeam?.shortName||m.awayTeam?.name||"Away",league:m.competition?.name||league,date:m.utcDate,status:m.status,matchday:m.matchday,homeScore:m.score?.fullTime?.home,awayScore:m.score?.fullTime?.away}));
+  const apiUrl=`https://api.football-data.org/v4/competitions/${league}/matches?dateFrom=${from}&dateTo=${to}`;
+  const sig=()=>AbortSignal.timeout(10000);
+  const proxies=[
+    async()=>{const r=await fetch(`https://cors.eu.org/${apiUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error(`cors.eu ${r.status}`);const d=await r.json();if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const urlK=apiUrl+"&apikey="+fdKey;const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlK)}`,{signal:sig()});if(!r.ok)throw new Error("allorigins");const w=await r.json();const d=JSON.parse(w.contents);if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const r=await fetch(`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error(`corsproxy ${r.status}`);const d=await r.json();if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const r=await fetch(`https://thingproxy.freeboard.io/fetch/${apiUrl}`,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok)throw new Error("thingproxy");const d=await r.json();if(d.matches===undefined)throw new Error("no matches");return d;},
+    async()=>{const r=await fetch(apiUrl,{headers:{"X-Auth-Token":fdKey},signal:sig()});if(!r.ok){const e=await r.json();throw new Error(e.message||`HTTP ${r.status}`);}return r.json();},
+  ];
+  let lastErr="unknown";
+  for(const fn of proxies){try{const d=await fn();if(d.matches!==undefined)return parse(d);}catch(e){lastErr=e.message;}}
+  throw new Error(`Fixtures লোড ব্যর্থ: ${lastErr}`);
+}
+
+function FixTab({onPick,pc}){
+  const [fdk,setFdk]=useState(getFdKey);
+  const [inp,setInp]=useState("");
+  const [showIn,setShowIn]=useState(!getFdKey());
+  const [lg,setLg]=useState("PL");
+  const [dtF,setDtF]=useState("all");
+  const [q,setQ]=useState("");
+  const [ms,setMs]=useState([]);
+  const [load,setLoad]=useState(false);
+  const [er,setEr]=useState(null);
+  const [lu,setLu]=useState(null);
+
+  const loadMs=useCallback(async(l,k)=>{
+    if(!k)return;
+    setLoad(true);setEr(null);
+    try{const data=await fetchFD(k,l,toBDDateStr(0),toBDDateStr(30));setMs(data);setLu(new Date());}
+    catch(e){setEr(e.message);}
+    setLoad(false);
+  },[]);
+
+  useEffect(()=>{if(fdk)loadMs(lg,fdk);},[lg,fdk]);
+
+  const saveKey=()=>{const k=inp.trim();if(!k)return;saveFdKey(k);setFdk(k);setInp("");setShowIn(false);loadMs(lg,k);};
+
+  const filtered=ms.filter(m=>{
+    if(q&&!m.home.toLowerCase().includes(q.toLowerCase())&&!m.away.toLowerCase().includes(q.toLowerCase()))return false;
+    if(dtF==="today"&&!isTodayBD(m.date))return false;
+    if(dtF==="tomorrow"&&!isTomorrowBD(m.date))return false;
+    return true;
+  });
+  const grouped=filtered.reduce((a,m)=>{const k=m.date.split("T")[0];if(!a[k])a[k]=[];a[k].push(m);return a;},{});
+  const liveCount=ms.filter(m=>m.status==="IN_PLAY"||m.status==="PAUSED").length;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:11}}>
+      <div style={{background:"linear-gradient(135deg,rgba(59,158,255,0.09),rgba(59,158,255,0.03))",border:"1px solid rgba(59,158,255,0.18)",borderRadius:15,padding:"14px 15px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+        <div>
+          <h2 style={{color:"#fff",fontSize:15,fontWeight:900,margin:"0 0 3px"}}>⚽ Live <span style={{color:"#3b9eff"}}>Fixtures</span>{liveCount>0&&<span style={{marginLeft:8,background:"rgba(255,77,77,0.15)",color:"#ff4d4d",fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20,animation:"pulse 1.5s infinite"}}>🔴 {liveCount} LIVE</span>}</h2>
+          <p style={{color:"#334455",fontSize:10,margin:0}}>Real-time match data · BD Timezone</p>
+        </div>
+        {lu&&<p style={{color:"#1a2a34",fontSize:11,margin:0}}>🔄 {fmtTimeBD(lu.toISOString())} (BD)</p>}
+      </div>
+
+      {showIn?(
+        <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"14px"}}>
+          <p style={{color:"#c8d8e8",fontSize:13,fontWeight:700,margin:"0 0 10px"}}>🔑 Football-Data.org API Key</p>
+          <div style={{display:"flex",gap:8}}>
+            <input value={inp} onChange={e=>setInp(e.target.value)} placeholder="API key দিন..." style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"11px 12px",color:"#e0e6f0",fontSize:13,outline:"none"}} onKeyDown={e=>e.key==="Enter"&&saveKey()}/>
+            <button onClick={saveKey} style={{background:"linear-gradient(135deg,#3b9eff,#2280dd)",border:"none",borderRadius:9,padding:"11px 16px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer"}}>Save</button>
+          </div>
+          <p style={{color:"#334455",fontSize:10,marginTop:6}}>📋 football-data.org → Sign up → Free API key</p>
+        </div>
+      ):(
+        <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.1)",borderRadius:12,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:"#00ff9d",fontSize:12,fontWeight:700}}>🔑 Football-Data.org সংযুক্ত</span>
+          <button onClick={()=>setShowIn(true)} style={{background:"none",border:"none",color:"#334455",fontSize:11,cursor:"pointer",textDecoration:"underline"}}>পরিবর্তন</button>
+        </div>
+      )}
+
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {FDLEAGUES.map(l=>(
+          <button key={l.id} onClick={()=>setLg(l.id)} style={{padding:"7px 13px",borderRadius:22,border:`1px solid ${lg===l.id?"rgba(59,158,255,0.5)":"rgba(255,255,255,0.05)"}`,background:lg===l.id?"rgba(59,158,255,0.11)":"rgba(255,255,255,0.01)",color:lg===l.id?"#3b9eff":"#334455",cursor:"pointer",fontSize:12,fontWeight:lg===l.id?700:500}}>{l.flag} {l.name}</button>
+        ))}
+      </div>
+
+      <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+        <input placeholder="🔍 Search team..." value={q} onChange={e=>setQ(e.target.value)} style={{flex:1,minWidth:130,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,padding:"11px 13px",color:"#e0e6f0",fontSize:13,outline:"none"}}/>
+        {["all","today","tomorrow"].map(f=>(
+          <button key={f} onClick={()=>setDtF(f)} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${dtF===f?"rgba(59,158,255,0.4)":"rgba(255,255,255,0.05)"}`,background:dtF===f?"rgba(59,158,255,0.1)":"rgba(255,255,255,0.01)",color:dtF===f?"#3b9eff":"#334455",cursor:"pointer",fontSize:12,fontWeight:dtF===f?700:500}}>
+            {f==="all"?"All":f==="today"?"Today":"Tomorrow"}
+          </button>
+        ))}
+        <button onClick={()=>loadMs(lg,fdk)} disabled={load} style={{padding:"9px 14px",borderRadius:10,border:"1px solid rgba(59,158,255,0.2)",background:"rgba(59,158,255,0.07)",color:"#3b9eff",cursor:load?"not-allowed":"pointer",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+          {load?<div style={{width:16,height:16,border:"2px solid #3b9eff33",borderTopColor:"#3b9eff",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>:"🔄"}
+        </button>
+      </div>
+
+      {er&&<div style={{background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.18)",borderRadius:12,padding:"13px 15px",color:"#ff7070",fontSize:13}}>⚠️ {er}</div>}
+      {load&&<div style={{textAlign:"center",padding:"32px",color:"#334455",fontSize:13}}>⏳ লোড হচ্ছে...</div>}
+
+      {!load&&Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).map(([date,dms])=>{
+        const isToday=isTodayBD(dms[0].date),isTom=isTomorrowBD(dms[0].date);
+        const col=isToday?"#00ff9d":isTom?"#ffc107":"#3b9eff";
+        return(
+          <div key={date}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:7,background:`${col}10`,border:`1px solid ${col}25`,borderRadius:20,padding:"5px 13px",marginBottom:8}}>
+              <span style={{color:col,fontSize:11,fontWeight:800}}>{isToday?"📅 Today":isTom?"📅 Tomorrow":fmtDateBD(dms[0].date)}</span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {dms.map(m=>{
+                const live=m.status==="IN_PLAY"||m.status==="PAUSED",fin=m.status==="FINISHED",hasScore=m.homeScore!=null&&m.awayScore!=null;
+                return(
+                  <div key={m.id} style={{background:live?"rgba(255,77,77,0.04)":"rgba(255,255,255,0.02)",border:`1px solid ${live?"rgba(255,77,77,0.2)":"rgba(255,255,255,0.05)"}`,borderRadius:14,padding:"13px 14px",display:"flex",gap:11,alignItems:"center"}}>
+                    <div style={{flex:1}}>
+                      <p style={{color:"#1a2a34",fontSize:11,fontWeight:700,margin:"0 0 6px"}}>⚽ {m.league}{m.matchday?` · MD${m.matchday}`:""}</p>
+                      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:6}}>
+                        <span style={{color:"#fff",fontSize:15,fontWeight:800,flex:1}}>{m.home}</span>
+                        {hasScore?<span style={{background:"rgba(255,255,255,0.06)",color:live?"#ff4d4d":"#c8d8e8",fontSize:15,fontWeight:900,fontFamily:"monospace",padding:"3px 11px",borderRadius:8,flexShrink:0,border:`1px solid ${live?"rgba(255,77,77,0.2)":"rgba(255,255,255,0.07)"}`}}>{m.homeScore}–{m.awayScore}</span>:<span style={{color:"#2a3a44",fontSize:13,padding:"0 6px",flexShrink:0}}>vs</span>}
+                        <span style={{color:"#fff",fontSize:15,fontWeight:800,flex:1,textAlign:"right"}}>{m.away}</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:9}}>
+                        <span style={{color:"#2a3a44",fontSize:12}}>🕒 {fmtTimeBD(m.date)} (BD)</span>
+                        {live&&<span style={{background:"rgba(255,77,77,0.12)",color:"#ff4d4d",fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20}}>🔴 LIVE</span>}
+                        {fin&&<span style={{background:"rgba(100,100,100,0.12)",color:"#667788",fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20}}>FT</span>}
+                      </div>
+                    </div>
+                    <button onClick={()=>onPick&&onPick({teamA:m.home,teamB:m.away,sport:"Football",league:m.league})}
+                      style={{background:"linear-gradient(135deg,rgba(0,255,157,0.12),rgba(0,255,157,0.06))",border:"1px solid rgba(0,255,157,0.22)",borderRadius:11,padding:"10px 15px",cursor:"pointer",color:"#00ff9d",fontWeight:800,fontSize:12,flexShrink:0}}>
+                      🔮 Predict
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {fdk&&!load&&Object.keys(grouped).length===0&&!er&&(
+        <div style={{textAlign:"center",padding:"40px 20px"}}>
+          <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:14,background:"rgba(59,158,255,0.04)",border:"1px solid rgba(59,158,255,0.1)",borderRadius:20,padding:"32px 36px"}}>
+            <div style={{fontSize:52}}>🏟️</div>
+            <p style={{color:"#c8d8e8",fontSize:15,fontWeight:800,margin:"0 0 6px"}}>কোনো Match পাওয়া যায়নি</p>
+            <p style={{color:"#2a3a44",fontSize:12,lineHeight:1.7}}>অন্য একটি League বেছে নিন।</p>
+          </div>
+        </div>
+      )}
+      {!fdk&&<div style={{textAlign:"center",padding:"32px",color:"#334455",fontSize:13}}>🔑 API key দিন fixtures দেখতে।</div>}
+    </div>
+  );
+}
+
 // ─────────────────────────────
 // ── History Tab ──
 // ─────────────────────────────
@@ -852,6 +685,8 @@ function SlipTab(){
 function App(){
   const {primary,secondary}=getActiveProviders();
   const hasConfig=primary||secondary;
+
+  // Provider color for UI accents
   const activeMeta=primary?PROVIDERS_META[primary.id]:secondary?PROVIDERS_META[secondary.id]:null;
   const pc=activeMeta?.color||"#00ff9d";
 
@@ -871,39 +706,17 @@ function App(){
   const [er,setEr]=useState(null);
   const fRef=useRef();
 
-  // ── Plan state ──
-  const [showUpgrade,setShowUpgrade]=useState(false);
-  const [showManage,setShowManage]=useState(false);
-  const [planRefresh,setPlanRefresh]=useState(0);
-  const planCfg=getPlanCfg()||defaultPlanCfg();
-  const prem=isPremium();
-  const {ok:canP,used:usedToday,limit:dayLimit}=canPredict();
-  // Screenshot allowed?
-  const shotAllowed=prem?planCfg.premium.screenshotEnabled:planCfg.free.screenshotEnabled;
-
   if(!hasConfig)return <NoConfig/>;
 
   const togM=m=>setSelM(s=>s.includes(m)?s.filter(x=>x!==m):[...s,m]);
   const addAcc=(r)=>{const b=r.predictions?.find(p=>p.best)||r.predictions?.[0];if(!b)return;setAccum(a=>[...a,{match:`${r.teamA} vs ${r.teamB}`,market:`${b.market}: ${b.prediction}`,prob:b.prob,id:Date.now()}]);};
   const ap=accum.length?Math.round(accum.reduce((p,c)=>p*(c.prob/100),1)*100):0;
 
-  // Gate for prediction — check limit
-  const gatedPredict=async(fn)=>{
-    const check=canPredict();
-    if(!check.ok){setShowUpgrade(true);return false;}
-    await fn();
-    incTodayCount();
-    setPlanRefresh(r=>r+1);
-    return true;
-  };
-
   const pf=async(f)=>{if(!f||!f.type.startsWith("image/")){setEr("Image দিন।");return;}setMime(f.type);setPrev(URL.createObjectURL(f));setResults([]);setEr(null);try{setB64(await f2b(f));}catch{setEr("ফাইল পড়া যায়নি।");}};
   const VP=`Look at this betting app screenshot. Extract ALL visible matches. Respond ONLY as JSON array no markdown: [{"teamA":"<n>","teamB":"<n>","sport":"<Football|Cricket|Basketball|Tennis|Hockey>","league":"<l>","rawOdds":"<odds>"}]`;
 
   const runShot=async()=>{
     if(!b64){setEr("Screenshot দিন।");return;}
-    if(!shotAllowed){setEr("Screenshot এই plan এ disabled।");return;}
-    const check=canPredict();if(!check.ok){setShowUpgrade(true);return;}
     setLoad(true);setEr(null);setResults([]);
     try{
       setMsg("📸 Matches খুঁজছি...");
@@ -916,19 +729,18 @@ function App(){
         try{const pr=await predMatch(ms[i]);addPrediction(pr);all.push(pr);}
         catch(e){all.push({...ms[i],error:e.message,predictions:[],winProb:50,confidence:50});}
       }
-      setResults(all);incTodayCount();setPlanRefresh(r=>r+1);
+      setResults(all);
     }catch(e){setEr(e.message);}
     setLoad(false);setMsg("");
   };
 
   const runManual=async()=>{
     if(!tA||!tB){setEr("Team name দিন।");return;}
-    const check=canPredict();if(!check.ok){setShowUpgrade(true);return;}
     setLoad(true);setEr(null);setManR(null);
     try{
       setMsg(`🤖 ${tA} vs ${tB}...`);
       const res=await predMatch({teamA:tA,teamB:tB,sport,league,rawOdds:selM.join(",")});
-      setManR(res);addPrediction(res);incTodayCount();setPlanRefresh(r=>r+1);
+      setManR(res);addPrediction(res);
     }catch(e){setEr(e.message);}
     setLoad(false);setMsg("");
   };
@@ -937,7 +749,7 @@ function App(){
   const BP=(d)=>({background:d?`${pc}0d`:`linear-gradient(135deg,${pc},${pc}cc)`,border:"none",borderRadius:11,padding:"13px",cursor:d?"not-allowed":"pointer",color:d?"#2a3a44":"#fff",fontWeight:900,fontSize:15,width:"100%",opacity:d?0.6:1,boxShadow:d?"none":`0 4px 18px ${pc}25`});
 
   const TABS=[
-    
+    {id:"fixtures",icon:"📡",label:"Fixtures",hc:"#3b9eff"},
     {id:"upload",icon:"📸",label:"Screenshot"},
     {id:"manual",icon:"✏️",label:"Manual"},
     {id:"slip",icon:"📊",label:"BetSlip",hc:"#ffc107"},
@@ -976,6 +788,7 @@ function App(){
         </div>
 
         {/* Fixtures */}
+        {tab==="fixtures"&&<FixTab pc={pc} onPick={({teamA,teamB,sport:sp,league:lg})=>{setTA(teamA);setTB(teamB);setSport(sp?.toLowerCase()||"football");setLeague(lg||"");setSelM([]);setManR(null);setEr(null);setTab("manual");}}/>}
 
         {/* Screenshot */}
         {tab==="upload"&&<div style={{display:"flex",flexDirection:"column",gap:11}}>
@@ -1024,10 +837,6 @@ function App(){
         <p style={{textAlign:"center",marginTop:28,color:"#1a2a34",fontSize:10}}>PredictIQ · AI Sports Analysis · শুধু বিনোদন ও গবেষণার জন্য</p>
       </div>
     </div>
-
-    {/* Modals */}
-    {showUpgrade&&<UpgradeModal onClose={()=>setShowUpgrade(false)} onActivate={()=>setPlanRefresh(r=>r+1)}/>}
-    {showManage&&<ManageModal onClose={()=>{setShowManage(false);setPlanRefresh(r=>r+1);}}/>}
   );
 }
 
