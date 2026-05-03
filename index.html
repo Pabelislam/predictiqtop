@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>PredictIQ — AI Sports Prediction</title>
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+<script>
+window.addEventListener('error',function(e){
+  if(e.message&&e.message.indexOf('React')>=0||!window.React){
+    document.body.innerHTML='<div style="color:#ff7070;text-align:center;padding:40px;font-family:sans-serif"><h2>⚠️ Loading Error</h2><p style="margin-top:10px;color:#888">Please check your internet connection and reload.</p><button onclick="location.reload()" style="margin-top:20px;padding:12px 24px;background:#00ff9d;color:#000;border:none;border-radius:8px;font-size:16px;cursor:pointer">🔄 Reload</button></div>';
+  }
+});
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{background:#060a10;font-family:'Segoe UI',system-ui,sans-serif;color:#e0e6f0;min-height:100vh;-webkit-text-size-adjust:100%;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+input,button,select{font-family:inherit;font-size:inherit}
+input::placeholder{color:#445566}
+select{-webkit-appearance:none}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#0a0f1a}
+::-webkit-scrollbar-thumb{background:#1a3a2a;border-radius:6px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes lp{0%,100%{box-shadow:0 0 7px #ff4d4d}50%{box-shadow:0 0 16px #ff4d4d}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef,useEffect,useCallback}=React;
+
+const PROVIDERS=[
+  {id:"groq",name:"Groq",icon:"⚡",color:"#f55036",badge:"FREE",ph:"gsk_...",steps:["console.groq.com এ যান","Google দিয়ে Sign up","API Keys → Create","Key copy করুন"]},
+  {id:"gemini",name:"Gemini",icon:"🔷",color:"#4285f4",badge:"FREE",ph:"AIzaSy...",steps:["aistudio.google.com এ যান","Google Sign in","Get API Key → Create","Key copy করুন"]},
+  {id:"deepseek",name:"DeepSeek",icon:"🔵",color:"#4d6ef5",badge:"FREE",ph:"sk-...",steps:["platform.deepseek.com এ যান","Sign up করুন","API Keys → Create","Key copy করুন"]},
+  {id:"kimi",name:"Kimi",icon:"🌙",color:"#a855f7",badge:"FREE",ph:"sk-...",steps:["platform.moonshot.cn এ যান","Sign up করুন","API Keys → New","Key copy করুন"]},
+  {id:"openai",name:"ChatGPT",icon:"🟩",color:"#10a37f",badge:"PAID",ph:"sk-proj-...",steps:["platform.openai.com এ যান","Sign up / Login","API Keys → Create","Key copy করুন"]},
+  {id:"anthropic",name:"Claude",icon:"🟧",color:"#ff6b35",badge:"PAID",ph:"sk-ant-...",steps:["console.anthropic.com এ যান","Sign up / Login","API Keys → Create","Key copy করুন"]},
+];
+const SPORTS=[{id:"football",icon:"⚽",label:"Football"},{id:"cricket",icon:"🏏",label:"Cricket"},{id:"basketball",icon:"🏀",label:"Basketball"},{id:"tennis",icon:"🎾",label:"Tennis"},{id:"hockey",icon:"🏑",label:"Hockey"}];
+const MARKETS={football:["1X2","Double Chance","Over/Under Goals","BTTS","Asian Handicap","Euro Handicap","Correct Score","HT/FT","Corners","Cards","First Goal"],cricket:["Match Winner","Toss Winner","Total Runs","Top Batsman","Top Bowler","Wickets","Extra Runs"],basketball:["Match Winner","Point Spread","Total Points","Quarter Bet"],tennis:["Match Winner","Set Betting","Total Games","Handicap"],hockey:["Match Winner","Total Goals","Handicap"]};
+
+const RC={Low:"#00ff9d",Medium:"#ffc107",High:"#ff4d4d"};
+const VC={"Safe to Play":"#00ff9d","Risky but Possible":"#ffc107","Very Risky - Reconsider":"#ff4d4d"};
+
+// Storage
+function getCfg(){try{const s=localStorage.getItem("piq7");return s?JSON.parse(s):null;}catch{return null;}}
+function saveCfg(c){try{localStorage.setItem("piq7",JSON.stringify(c));}catch{}}
+function clearCfg(){try{localStorage.removeItem("piq7");}catch{}}
+
+// ── History Storage ──
+const HIST_KEY="piq_hist_v1";
+const BOPTS_KEY="piq_betting_opts_v1";
+const DEFAULT_SLIP_MARKETS=["1X2 Home Win","1X2 Draw","1X2 Away Win","Double Chance 1X","Double Chance X2","Over 1.5","Over 2.5","Over 3.5","Under 1.5","Under 2.5","BTTS Yes","BTTS No","Asian HC -0.5","Asian HC +0.5","Correct Score","HT/FT","Match Winner"];
+function getBettingOpts(){try{const s=localStorage.getItem(BOPTS_KEY);if(s){const opts=JSON.parse(s);const active=opts.filter(o=>o.active).sort((a,b)=>a.order-b.order);if(active.length>0)return active.map(o=>o.name);}return null;}catch{return null;}}
+function getDynamicSlipMarkets(){return getBettingOpts()||DEFAULT_SLIP_MARKETS;}
+function getDynamicMarkets(sport){const opts=getBettingOpts();if(!opts||opts.length===0)return MARKETS[sport]||MARKETS.football;return opts;}
+function getHistory(){try{const s=localStorage.getItem(HIST_KEY);return s?JSON.parse(s):[];}catch{return[];}}
+function saveHistory(h){try{localStorage.setItem(HIST_KEY,JSON.stringify(h.slice(0,500)));}catch{}}
+function addPrediction(r){
+  const h=getHistory();
+  const best=r.predictions?.find(p=>p.best)||r.predictions?.[0];
+  if(!best)return;
+  const entry={
+    id:"p_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
+    match:`${r.teamA} vs ${r.teamB}`,
+    teamA:r.teamA,teamB:r.teamB,
+    league:r.league||"Unknown",
+    sport:r.sport||"Football",
+    market:best.market,
+    prediction:best.prediction,
+    prob:best.prob,
+    confidence:r.confidence||70,
+    riskLevel:r.riskLevel||"Medium",
+    analysis:r.analysis||"",
+    time:Date.now(),
+    result:null,// null=pending, true=win, false=loss
+  };
+  h.unshift(entry);
+  saveHistory(h);
+  return entry;
+}
+function updateResult(id,won){
+  const h=getHistory();
+  const idx=h.findIndex(x=>x.id===id);
+  if(idx>=0){h[idx].result=won;saveHistory(h);}
+}
+function calcStats(h){
+  const settled=h.filter(x=>x.result!==null);
+  const wins=settled.filter(x=>x.result===true).length;
+  const total=h.length;
+  const acc=settled.length?Math.round((wins/settled.length)*100):0;
+  // by market
+  const mStats={};
+  settled.forEach(x=>{
+    if(!mStats[x.market])mStats[x.market]={w:0,t:0};
+    mStats[x.market].t++;
+    if(x.result)mStats[x.market].w++;
+  });
+  // by confidence
+  const cStats={High:{w:0,t:0},Medium:{w:0,t:0},Low:{w:0,t:0}};
+  settled.forEach(x=>{
+    const c=x.confidence>=80?"High":x.confidence>=60?"Medium":"Low";
+    cStats[c].t++;
+    if(x.result)cStats[c].w++;
+  });
+  // by time
+  const now=Date.now();
+  const day=settled.filter(x=>now-x.time<86400000);
+  const week=settled.filter(x=>now-x.time<604800000);
+  const month=settled.filter(x=>now-x.time<2592000000);
+  return{total,settled:settled.length,wins,acc,mStats,cStats,
+    daily:day.length?Math.round((day.filter(x=>x.result).length/day.length)*100):null,
+    weekly:week.length?Math.round((week.filter(x=>x.result).length/week.length)*100):null,
+    monthly:month.length?Math.round((month.filter(x=>x.result).length/month.length)*100):null,
+  };
+}
+
+
+// Utils
+function oddsToProb(o){const n=parseFloat(o);if(!n||n<=1)return 50;return Math.round((1/n)*1000)/10;}
+function combinedProb(arr){if(!arr.length)return 0;return Math.round(arr.reduce((p,m)=>p*(m.prob/100),1)*10000)/100;}
+function slipRisk(p){if(p>=55)return{level:"Low",color:"#00ff9d",icon:"🟢"};if(p>=30)return{level:"Medium",color:"#ffc107",icon:"🟡"};if(p>=15)return{level:"High",color:"#ff8800",icon:"🔴"};return{level:"Very High",color:"#ff4d4d",icon:"🚨"};}
+async function f2b(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(f);});}
+function pj(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("{"),e=c.lastIndexOf("}");if(s<0||e<0)throw new Error("JSON error");return JSON.parse(c.slice(s,e+1));}
+function pa(t){const c=t.replace(/```json|```/g,"").trim();const s=c.indexOf("["),e=c.lastIndexOf("]");if(s<0||e<0)throw new Error("Array error");return JSON.parse(c.slice(s,e+1));}
+function fmtTime(d){return new Date(d).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:true});}
+
+// AI API
+async function ai(pid,key,prompt){
+  const h={"Content-Type":"application/json","Authorization":"Bearer "+key};
+  if(pid==="groq"){const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
+  if(pid==="deepseek"){const r=await fetch("https://api.deepseek.com/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"deepseek-chat",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
+  if(pid==="kimi"){const r=await fetch("https://api.moonshot.cn/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"moonshot-v1-8k",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
+  if(pid==="openai"){const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:h,body:JSON.stringify({model:"gpt-4o-mini",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
+  if(pid==="gemini"){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates[0].content.parts[0].text;}
+  if(pid==="anthropic"){const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;}
+  throw new Error("Unknown provider");
+}
+
+async function vision(pid,key,vk,b64,mime,prompt){
+  const gk=pid==="gemini"?key:vk;
+  if(gk){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gk}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:mime,data:b64}}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.candidates[0].content.parts[0].text;}
+  if(pid==="openai"){const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:"gpt-4o",max_tokens:1200,messages:[{role:"user",content:[{type:"text",text:prompt},{type:"image_url",image_url:{url:`data:${mime};base64,${b64}`}}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.choices[0].message.content;}
+  if(pid==="anthropic"){const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mime,data:b64}},{type:"text",text:prompt}]}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;}
+  throw new Error("Vision এর জন্য Gemini/OpenAI/Claude key লাগবে।");
+}
+
+// ── Shared UI ──
+function Bar({v,c,h=7}){return <div style={{background:"rgba(255,255,255,0.05)",borderRadius:5,height:h,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(v,100)}%`,background:`linear-gradient(90deg,${c}44,${c})`,boxShadow:`0 0 8px ${c}44`,transition:"width 1.4s ease",borderRadius:5}}/></div>;}
+function Ring({val,size=80,color,label}){const r=size/2-8,c=2*Math.PI*r,d=(Math.min(val,100)/100)*c;return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><div style={{position:"relative",width:size,height:size}}><svg width={size} height={size} style={{transform:"rotate(-90deg)",position:"absolute"}}><circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={6}/><circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={6} strokeDasharray={`${d} ${c}`} strokeLinecap="round" style={{filter:`drop-shadow(0 0 6px ${color}88)`,transition:"stroke-dasharray 1.4s ease"}}/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color,fontSize:size/5.2,fontWeight:900,fontFamily:"monospace"}}>{val}%</span></div></div>{label&&<span style={{color:"#445566",fontSize:9,fontWeight:700,letterSpacing:1}}>{label}</span>}</div>;}
+function Tag({t,c,sm}){return <span style={{background:`${c}13`,color:c,fontSize:sm?10:12,fontWeight:800,padding:sm?"3px 8px":"4px 11px",borderRadius:22,border:`1px solid ${c}25`,whiteSpace:"nowrap"}}>{t}</span>;}
+function Spin({c="#00ff9d"}){return <div style={{width:22,height:22,border:`2.5px solid ${c}20`,borderTopColor:c,borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>;}
+function Err({msg}){return msg?<div style={{background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.15)",borderRadius:11,padding:"12px 15px",color:"#ff7070",fontSize:13,animation:"fadeUp .3s ease"}}>⚠️ {msg}</div>:null;}
+
+// ── Key Setup ──
+function KeySetup({onSave}){
+  const [pid,setPid]=useState("groq");
+  const [k,setK]=useState("");
+    const [sh,setSh]=useState(false);
+  const [er,setEr]=useState("");
+  const pv=PROVIDERS.find(p=>p.id===pid);
+  const go=()=>{if(!k.trim()){setEr("Key দিন।");return;}const c={pid,key:k.trim()};saveCfg(c);onSave(c);};
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:18,position:"relative"}}>
+      <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(0,255,157,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,157,0.015) 1px,transparent 1px)",backgroundSize:"44px 44px",pointerEvents:"none"}}/>
+      <div style={{width:"100%",maxWidth:440,position:"relative",zIndex:1}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{width:68,height:68,borderRadius:18,background:"linear-gradient(135deg,#00ff9d14,#00ff9d28)",border:"1.5px solid #00ff9d38",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,margin:"0 auto 14px"}}>⚡</div>
+          <h1 style={{fontSize:28,fontWeight:900,color:"#fff",margin:"0 0 6px"}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></h1>
+          <p style={{color:"#334455",fontSize:14}}>AI Prediction · BetSlip Risk · Multi-Bet</p>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:18,padding:20}}>
+          <p style={{color:"#c8d8e8",fontWeight:800,fontSize:15,margin:"0 0 14px"}}>⚡ AI Provider বেছে নিন</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            {PROVIDERS.map(p=><div key={p.id} onClick={()=>{setPid(p.id);setK("");setEr("");}} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 14px",borderRadius:12,border:`1.5px solid ${pid===p.id?p.color+"77":"rgba(255,255,255,0.05)"}`,background:pid===p.id?`${p.color}0a`:"rgba(255,255,255,0.01)",cursor:"pointer"}}>
+              <div style={{width:36,height:36,borderRadius:10,background:`${p.color}15`,border:`1px solid ${p.color}28`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{p.icon}</div>
+              <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{color:pid===p.id?p.color:"#c8d8e8",fontWeight:700,fontSize:14}}>{p.name}</span><span style={{background:p.badge==="FREE"?"rgba(0,255,157,0.1)":"rgba(255,193,7,0.1)",color:p.badge==="FREE"?"#00ff9d":"#ffc107",fontSize:9,fontWeight:900,padding:"2px 7px",borderRadius:20}}>{p.badge}</span></div><p style={{color:"#1a2a34",fontSize:11,margin:0}}>{p.steps[0]}</p></div>
+              <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${pid===p.id?p.color:"#1a2a34"}`,background:pid===p.id?p.color:"transparent",flexShrink:0}}/>
+            </div>)}
+          </div>
+          <div style={{position:"relative",marginBottom:er?"7px":"12px"}}>
+            <input type={sh?"text":"password"} placeholder={pv.ph} value={k} onChange={e=>setK(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} style={{width:"100%",background:"rgba(255,255,255,0.04)",border:`1px solid ${pv.color}25`,borderRadius:9,padding:"11px 42px 11px 12px",color:"#e0e6f0",fontSize:12,outline:"none"}}/>
+            <button onClick={()=>setSh(s=>!s)} style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15}}>{sh?"🙈":"👁️"}</button>
+          </div>
+          
+          {er&&<p style={{color:"#ff6b6b",fontSize:11,margin:"0 0 9px"}}>⚠️ {er}</p>}
+          <button onClick={go} style={{width:"100%",background:`linear-gradient(135deg,${pv.color},${pv.color}cc)`,border:"none",borderRadius:10,padding:"12px",cursor:"pointer",color:"#fff",fontWeight:900,fontSize:14,boxShadow:`0 4px 20px ${pv.color}28`,marginBottom:13}}>✅ শুরু করুন</button>
+          <div style={{background:`${pv.color}08`,border:`1px solid ${pv.color}13`,borderRadius:8,padding:"9px 11px"}}><p style={{color:pv.color,fontSize:10,fontWeight:800,margin:"0 0 5px"}}>📋 Key পাবেন:</p>{pv.steps.map((s,i)=><div key={i} style={{display:"flex",gap:6,marginBottom:i<3?3:0}}><span style={{color:pv.color,fontSize:9,fontWeight:800,flexShrink:0}}>{i+1}.</span><span style={{color:"#334455",fontSize:10,lineHeight:1.5}}>{s}</span></div>)}</div>
+          <p style={{color:"#0e1a20",fontSize:9,textAlign:"center",marginTop:9}}>🔒 Key শুধু browser এ</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Match Result Card ──
+function MCard({r,idx,onAdd,pc}){
+  const [op,setOp]=useState(idx===0);
+  if(r.error)return <div style={{background:"rgba(255,77,77,0.04)",border:"1px solid rgba(255,77,77,0.1)",borderRadius:11,padding:"11px 13px"}}><p style={{color:"#fff",fontSize:13,fontWeight:700}}>{r.teamA} vs {r.teamB}</p><p style={{color:"#ff7070",fontSize:10,marginTop:3}}>⚠️ {r.error}</p></div>;
+  return(
+    <div style={{background:"rgba(255,255,255,0.02)",border:`1.5px solid ${op?pc+"28":"rgba(255,255,255,0.04)"}`,borderRadius:12,overflow:"hidden",animation:"fadeUp .3s ease"}}>
+      <div onClick={()=>setOp(o=>!o)} style={{padding:"13px 15px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",background:op?`${pc}04`:"transparent"}}>
+        <div style={{flex:1,minWidth:0}}><p style={{color:"#1a3a28",fontSize:10,fontWeight:700,letterSpacing:1,margin:"0 0 3px"}}>{r.sport?.toUpperCase()} · {r.league}</p><h3 style={{color:"#fff",fontSize:16,fontWeight:900,margin:0}}>{r.teamA} <span style={{color:"#1a2a1a"}}>vs</span> {r.teamB}</h3></div>
+        <div style={{display:"flex",gap:9,alignItems:"center",marginLeft:11,flexShrink:0}}><div style={{textAlign:"right"}}><div style={{color:"#00ff9d",fontSize:19,fontWeight:900,fontFamily:"monospace"}}>{r.winProb}%</div><div style={{color:"#1a3a28",fontSize:9,fontWeight:700}}>WIN</div></div><span style={{color:"#1e2e3a",fontSize:13,transform:op?"rotate(180deg)":"rotate(0)",display:"block",transition:"transform .2s"}}>▼</span></div>
+      </div>
+      {op&&<div style={{padding:"0 13px 13px",borderTop:`1px solid ${pc}13`,animation:"fadeUp .2s ease"}}>
+        <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:9,paddingTop:10}}>
+          <div style={{flex:1,minWidth:0}}><p style={{color:"#5a7a8a",fontSize:11,margin:"0 0 8px",lineHeight:1.7}}>{r.analysis}</p><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{r.keyFactors?.map(f=><span key={f} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:20,padding:"2px 8px",fontSize:9,color:"#4a6070"}}>📌 {f}</span>)}</div></div>
+          <div style={{display:"flex",gap:9,flexShrink:0}}><Ring val={r.winProb} size={62} color="#00ff9d" label="WIN"/><Ring val={r.confidence} size={62} color="#3b9eff" label="CONF"/></div>
+        </div>
+        <p style={{color:"#1a2a34",fontSize:10,fontWeight:700,letterSpacing:1,margin:"13px 0 8px"}}>AI PREDICTIONS</p>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {r.predictions?.map((p,i)=><div key={i} style={{background:p.best?"rgba(0,255,157,0.05)":"rgba(255,255,255,0.02)",border:`1px solid ${p.best?"#00ff9d22":"rgba(255,255,255,0.03)"}`,borderRadius:10,padding:"11px 13px",position:"relative"}}>
+            {p.best&&<span style={{position:"absolute",top:-8,right:10,background:"#00ff9d",color:"#040e08",fontSize:9,fontWeight:900,padding:"2px 8px",borderRadius:20}}>BEST</span>}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><span style={{color:"#c8d8e8",fontSize:13,fontWeight:500,flex:1,marginRight:9,lineHeight:1.4}}>{p.market}: {p.prediction}</span><div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}><Tag t={p.risk} c={RC[p.risk]||"#667788"} sm/><span style={{color:RC[p.risk]||"#667788",fontSize:17,fontWeight:900,fontFamily:"monospace"}}>{p.prob}%</span></div></div>
+            <Bar v={p.prob} c={RC[p.risk]||"#667788"} h={5}/>
+          </div>)}
+        </div>
+        <button onClick={()=>onAdd(r)} style={{width:"100%",marginTop:10,background:`${pc}0d`,border:`1px solid ${pc}20`,borderRadius:8,padding:"9px",cursor:"pointer",color:pc,fontWeight:700,fontSize:11}}>🔗 Accumulator এ যোগ করুন</button>
+      </div>}
+    </div>
+  );
+}
+
+
+// ══════════════════════════════════════════════
+// ── ADMIN PLAN SYSTEM ──
+// ══════════════════════════════════════════════
+const ADMIN_KEY  = "piq_admin_v1";
+const PLAN_KEY   = "piq_plan_cfg_v1";
+const KEYS_KEY   = "piq_license_keys_v1";
+const USER_KEY   = "piq_user_plan_v1";
+const TODAY_KEY  = "piq_today_v1";
+
+const getAdminCfg  = ()=>{try{const s=localStorage.getItem(ADMIN_KEY);return s?JSON.parse(s):null;}catch{return null;}};
+const getPlanCfg   = ()=>{try{const s=localStorage.getItem(PLAN_KEY);return s?JSON.parse(s):null;}catch{return null;}};
+const getLicKeys   = ()=>{try{const s=localStorage.getItem(KEYS_KEY);return s?JSON.parse(s):[];}catch{return[];}};
+const saveLicKeys  = (k)=>{try{localStorage.setItem(KEYS_KEY,JSON.stringify(k));}catch{}};
+const getUserPlan  = ()=>{try{const s=localStorage.getItem(USER_KEY);return s?JSON.parse(s):null;}catch{return null;}};
+const saveUserPlan = (p)=>{try{p?localStorage.setItem(USER_KEY,JSON.stringify(p)):localStorage.removeItem(USER_KEY);}catch{}};
+
+function defaultPlanCfg(){
+  return{
+    free:{dailyLimit:3,screenshotEnabled:true,adsEnabled:false,aiLevel:"basic",arbitrage:false,oddsComparison:false},
+    premium:{dailyLimit:999,unlimited:true,screenshotEnabled:true,adsEnabled:false,aiLevel:"advanced",arbitrage:true,oddsComparison:true,priorityProcessing:true},
+    pricing:{currency:"BDT",weekly:99,monthly:299,lifetime:999,weeklyUSD:1,monthlyUSD:3,lifetimeUSD:10},
+    payment:{bkash:"",nagad:"",rocket:"",stripeLink:"",paypalLink:"",instructions:""},
+  };
+}
+
+// Get active AI providers from admin config
+function getAdminProviders(){
+  const cfg=getAdminCfg();
+  if(!cfg||!cfg.providers)return{primary:null,secondary:null};
+  const active=cfg.providers.filter(p=>p.active&&p.key&&p.key.trim());
+  return{
+    primary:active.find(p=>p.priority==="primary")||null,
+    secondary:active.find(p=>p.priority==="secondary")||null,
+  };
+}
+
+// AI with admin key + failover
+async function _aiAdmin(prompt){
+  const {primary,secondary}=getAdminProviders();
+  if(!primary&&!secondary)throw new Error("Admin panel এ AI provider সেট নেই।");
+  if(primary){try{const r=await ai(primary.id,primary.key,prompt);return r;}catch(e){if(!secondary)throw e;}}
+  return await ai(secondary.id,secondary.key,prompt);
+}
+
+// Vision with admin key + failover
+async function _visionAdmin(b64,mime,prompt){
+  const {primary,secondary}=getAdminProviders();
+  const all=[primary,secondary].filter(Boolean);
+  const vIds=["gemini","openai","anthropic"];
+  for(const p of all.filter(p=>vIds.includes(p.id))){
+    try{return await vision(p.id,p.key,"",b64,mime,prompt);}catch(e){}
+  }
+  for(const p of all.filter(p=>!vIds.includes(p.id))){
+    try{return await ai(p.id,p.key,`I have a betting app screenshot but cannot send the image directly. If you cannot see the image, respond with exactly: [] (empty array). Do NOT invent any matches. Only return matches if you can actually see them. Format: [{"teamA":"","teamB":"","sport":"Football","league":"","rawOdds":""}]`);}catch(e){}
+  }
+  throw new Error("Screenshot বিশ্লেষণ ব্যর্থ।");
+}
+
+async function _predMatchAI(m){
+  const txt=await _aiAdmin(`Sports betting analyst. Match: ${m.teamA||m.home} vs ${m.teamB||m.away}, Sport:${m.sport||"Football"}, League:${m.league||"Unknown"}. Respond ONLY valid JSON no markdown: {"teamA":"${m.teamA||m.home}","teamB":"${m.teamB||m.away}","sport":"${m.sport||"Football"}","league":"${m.league||"Unknown"}","confidence":<60-92>,"winProb":<55-88>,"riskLevel":"<Low|Medium|High>","predictions":[{"market":"<m>","prediction":"<pick>","prob":<50-90>,"risk":"<Low|Medium|High>","best":<true|false>}],"analysis":"<2 sentences>","keyFactors":["<f1>","<f2>","<f3>"]}`);
+  return pj(txt);
+}
+async function _predSlipAI(matches){
+  const data=matches.map((m,i)=>`#${i+1}:${m.teamA} vs ${m.teamB}|${m.market}|Odds:${m.odds}|Prob:${m.prob}%`).join("\n");
+  const cp=combinedProb(matches);
+  const txt=await _aiAdmin(`Betting risk analyst. Slip:\n${data}\nCombined:${cp}% Matches:${matches.length}\nRespond ONLY valid JSON no markdown: {"verdict":"<Safe to Play|Risky but Possible|Very Risky - Reconsider>","confidenceScore":<0-100>,"riskLevel":"<Low|Medium|High|Very High>","summary":"<3 sentences>","weakestMatchIndex":<0-based>,"matchAnalysis":[{"idx":<i>,"flag":"<Safe|Moderate|Risky|Very Risky>","reason":"<1-2 sentences>","alternative":"<safer or empty>"}],"suggestions":["<s1>","<s2>","<s3>","<s4>"],"whatIf":[{"removeIdx":<i>,"benefit":"<improvement>","shouldRemove":<true|false>}],"stakeAdvice":"<advice>","profitVsRisk":"<assessment>"}`);
+  return pj(txt);
+}
+
+// ── Plan helpers ──
+function isPremium(){
+  const up=getUserPlan();
+  if(!up||!up.premium)return false;
+  if(up.type==="lifetime")return true;
+  return up.expiresAt&&new Date(up.expiresAt)>new Date();
+}
+function getTodayCount(){
+  try{const s=localStorage.getItem(TODAY_KEY);const d=s?JSON.parse(s):{};const t=new Date().toISOString().slice(0,10);return d.date===t?d.count:0;}catch{return 0;}
+}
+function incTodayCount(){
+  try{const t=new Date().toISOString().slice(0,10);localStorage.setItem(TODAY_KEY,JSON.stringify({date:t,count:getTodayCount()+1}));}catch{}
+}
+function canPredict(){
+  if(isPremium())return{ok:true};
+  const cfg=getPlanCfg()||defaultPlanCfg();
+  const limit=cfg.free.dailyLimit;const used=getTodayCount();
+  if(used>=limit)return{ok:false,used,limit};
+  return{ok:true,used,limit};
+}
+function activateKey(input){
+  const keys=getLicKeys();const k=input.trim().toUpperCase();
+  const idx=keys.findIndex(kk=>kk.key===k&&kk.active&&!kk.usedBy);
+  if(idx<0){
+    if(keys.find(kk=>kk.key===k&&kk.usedBy==="this_device"))return{ok:false,msg:"এই key আগে ব্যবহার হয়েছে।"};
+    return{ok:false,msg:"Key পাওয়া যায়নি বা invalid।"};
+  }
+  const found=keys[idx];
+  saveLicKeys(keys.map((kk,i)=>i===idx?{...kk,usedBy:"this_device",usedAt:new Date().toISOString()}:kk));
+  const now=new Date();let exp=null;
+  if(found.type==="weekly"){const d=new Date(now);d.setDate(d.getDate()+7);exp=d.toISOString();}
+  else if(found.type==="monthly"){const d=new Date(now);d.setDate(d.getDate()+30);exp=d.toISOString();}
+  saveUserPlan({premium:true,type:found.type,activatedAt:now.toISOString(),expiresAt:exp,key:k});
+  return{ok:true,msg:`✅ ${found.type==="lifetime"?"Lifetime ♾️":found.type==="monthly"?"Monthly 📆 (30 দিন)":"Weekly 📅 (7 দিন)"} Premium activated!`};
+}
+
+// ── Plan Banner ──
+function PlanBanner({refresh,onUpgrade,onManage}){
+  const prem=isPremium();const up=getUserPlan();
+  const {ok,used,limit}=canPredict();
+  const left=limit-(used||0);
+  const expiresIn=up?.expiresAt?Math.ceil((new Date(up.expiresAt)-new Date())/86400000):null;
+  if(prem){
+    return(
+      <div style={{background:"linear-gradient(135deg,rgba(255,193,7,0.08),rgba(255,152,0,0.03))",border:"1px solid rgba(255,193,7,0.2)",borderRadius:12,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:18}}>⭐</span><div><p style={{color:"#ffc107",fontWeight:800,fontSize:12,margin:0}}>Premium Active {up?.type==="lifetime"?"♾️ Lifetime":up?.type==="monthly"?"📆 Monthly":"📅 Weekly"}</p><p style={{color:"#664400",fontSize:9,margin:0}}>{expiresIn!==null?`${expiresIn} দিন বাকি`:"Unlimited · Ad-free"}</p></div></div>
+        <button onClick={onManage} style={{background:"rgba(255,193,7,0.12)",border:"1px solid rgba(255,193,7,0.28)",color:"#ffc107",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:10,fontWeight:700}}>Manage</button>
+      </div>
+    );
+  }
+  return(
+    <div style={{background:ok?"rgba(59,158,255,0.04)":"rgba(255,77,77,0.05)",border:`1px solid ${ok?"rgba(59,158,255,0.15)":"rgba(255,77,77,0.22)"}`,borderRadius:12,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:16}}>{ok?"🆓":"🚫"}</span><div><p style={{color:ok?"#3b9eff":"#ff6b6b",fontWeight:800,fontSize:12,margin:0}}>{ok?`Free Plan — ${left} টি বাকি`:"Daily Limit শেষ!"}</p><p style={{color:"#334455",fontSize:9,margin:0}}>{ok?`${used||0}/${limit} ব্যবহার`:"Premium upgrade করুন"}</p></div></div>
+      <button onClick={onUpgrade} style={{background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",color:"#060a10",borderRadius:8,padding:"7px 13px",cursor:"pointer",fontSize:10,fontWeight:900,flexShrink:0}}>⭐ Upgrade</button>
+    </div>
+  );
+}
+
+// ── Upgrade Modal ──
+function UpgradeModal({onClose,onSuccess}){
+  const planCfg=getPlanCfg()||defaultPlanCfg();
+  const pr=planCfg.pricing;const pay=planCfg.payment;
+  const [tab,setTab]=useState("plans");
+  const [lk,setLk]=useState("");const [msg,setMsg]=useState("");const [msgOk,setMsgOk]=useState(false);
+  const doAct=()=>{
+    if(!lk.trim()){setMsg("Key দিন।");setMsgOk(false);return;}
+    const res=activateKey(lk);setMsg(res.msg);setMsgOk(res.ok);
+    if(res.ok)setTimeout(()=>{onSuccess&&onSuccess();onClose();},1500);
+  };
+  const showBDT=pr.currency==="BDT"||pr.currency==="BOTH";
+  const showUSD=pr.currency==="USD"||pr.currency==="BOTH";
+  const plans=[
+    {l:"Weekly",bdt:pr.weekly,usd:pr.weeklyUSD,c:"#3b9eff",i:"📅",n:"7 দিন"},
+    {l:"Monthly",bdt:pr.monthly,usd:pr.monthlyUSD,c:"#00ff9d",i:"📆",n:"30 দিন",pop:true},
+    {l:"Lifetime",bdt:pr.lifetime,usd:pr.lifetimeUSD,c:"#ffc107",i:"♾️",n:"চিরজীবন"},
+  ];
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{width:"100%",maxWidth:500,background:"#0c1118",borderRadius:"22px 22px 0 0",border:"1px solid rgba(255,193,7,0.18)",padding:"20px 18px 44px",maxHeight:"93vh",overflowY:"auto",animation:"fadeUp .3s ease"}}>
+        <div style={{width:40,height:4,background:"rgba(255,255,255,0.1)",borderRadius:4,margin:"0 auto 18px"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div><h2 style={{color:"#fff",fontSize:19,fontWeight:900,margin:0}}>⭐ Premium <span style={{color:"#ffc107"}}>Upgrade</span></h2><p style={{color:"#334455",fontSize:11,margin:0}}>Unlimited · No ads · Advanced AI</p></div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",color:"#667788",borderRadius:9,padding:"7px 11px",cursor:"pointer",fontSize:14}}>✕</button>
+        </div>
+        <div style={{display:"flex",gap:4,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4,marginBottom:16}}>
+          {[{id:"plans",l:"💰 Plans"},{id:"pay",l:"💳 Payment"},{id:"activate",l:"🔑 Activate"}].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"9px 4px",borderRadius:9,border:"none",cursor:"pointer",background:tab===t.id?"rgba(255,193,7,0.14)":"transparent",color:tab===t.id?"#ffc107":"#334455",fontWeight:tab===t.id?800:500,fontSize:11,transition:"all .15s"}}>{t.l}</button>
+          ))}
+        </div>
+        {tab==="plans"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.08)",borderRadius:12,padding:"12px 14px"}}>
+              <p style={{color:"#00ff9d",fontWeight:700,fontSize:11,marginBottom:8}}>Premium এ যা পাবেন:</p>
+              {["🔓 Unlimited predictions","📸 Screenshot analysis","🤖 Advanced AI analysis","🔍 Arbitrage detection","📊 Odds comparison","⚡ Priority processing","🚫 No ads"].map(f=>(
+                <div key={f} style={{display:"flex",gap:7,alignItems:"center",marginBottom:5}}><span style={{color:"#00ff9d",fontSize:12}}>✅</span><span style={{color:"#8899aa",fontSize:11}}>{f}</span></div>
+              ))}
+            </div>
+            {plans.map(pl=>(
+              <div key={pl.l} style={{background:pl.pop?"rgba(0,255,157,0.03)":"rgba(255,255,255,0.02)",border:`1.5px solid ${pl.pop?"rgba(0,255,157,0.18)":"rgba(255,255,255,0.06)"}`,borderRadius:13,padding:"12px 14px",position:"relative"}}>
+                {pl.pop&&<span style={{position:"absolute",top:-9,right:12,background:"linear-gradient(90deg,#00ff9d,#00cc7a)",color:"#040e08",fontSize:8,fontWeight:900,padding:"2px 10px",borderRadius:20}}>POPULAR</span>}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div><p style={{color:"#c8d8e8",fontWeight:800,fontSize:13,margin:"0 0 3px"}}>{pl.i} {pl.l}</p><p style={{color:"#334455",fontSize:10,margin:0}}>{pl.n}</p></div>
+                  <div style={{textAlign:"right"}}>
+                    {showBDT&&<p style={{color:pl.c,fontWeight:900,fontSize:17,fontFamily:"monospace",margin:0}}>৳{pl.bdt}</p>}
+                    {showUSD&&<p style={{color:pl.c,fontWeight:900,fontSize:showBDT?11:17,fontFamily:"monospace",margin:0}}>${pl.usd}</p>}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button onClick={()=>setTab("pay")} style={{width:"100%",marginTop:4,background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",borderRadius:12,padding:"14px",cursor:"pointer",color:"#060a10",fontWeight:900,fontSize:15}}>💳 Payment করুন →</button>
+          </div>
+        )}
+        {tab==="pay"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {[{l:"💗 bKash",v:pay.bkash,c:"#ff4d9e"},{l:"🟠 Nagad",v:pay.nagad,c:"#f7941d"},{l:"🟣 Rocket",v:pay.rocket,c:"#8b3fc8"}].filter(m=>m.v).map(m=>(
+              <div key={m.l} style={{background:`${m.c}08`,border:`1px solid ${m.c}18`,borderRadius:12,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div><p style={{color:m.c,fontWeight:800,fontSize:12,margin:0}}>{m.l}</p><p style={{color:"#c8d8e8",fontSize:16,fontWeight:900,fontFamily:"monospace",margin:"4px 0 0"}}>{m.v}</p></div>
+                <button onClick={()=>navigator.clipboard?.writeText(m.v)} style={{background:`${m.c}12`,border:`1px solid ${m.c}25`,color:m.c,borderRadius:9,padding:"7px 11px",cursor:"pointer",fontSize:11,fontWeight:700}}>📋 Copy</button>
+              </div>
+            ))}
+            {pay.stripeLink&&<a href={pay.stripeLink} target="_blank" rel="noreferrer" style={{display:"block",textAlign:"center",background:"linear-gradient(135deg,#635bff,#4f46e5)",borderRadius:12,padding:"13px",color:"#fff",fontWeight:900,fontSize:13,textDecoration:"none"}}>💳 Pay with Stripe →</a>}
+            {pay.paypalLink&&<a href={pay.paypalLink} target="_blank" rel="noreferrer" style={{display:"block",textAlign:"center",background:"linear-gradient(135deg,#003087,#0050b3)",borderRadius:12,padding:"13px",color:"#fff",fontWeight:900,fontSize:13,textDecoration:"none"}}>🔵 Pay with PayPal →</a>}
+            {pay.instructions&&<div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:12,padding:"12px 14px"}}><p style={{color:"#ffc107",fontWeight:700,fontSize:11,marginBottom:6}}>📋 Instructions:</p><p style={{color:"#8899aa",fontSize:11,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{pay.instructions}</p></div>}
+            {!pay.bkash&&!pay.nagad&&!pay.rocket&&!pay.stripeLink&&!pay.paypalLink&&<p style={{color:"#334455",fontSize:12,textAlign:"center",padding:"20px"}}>⚙️ Admin এখনো payment method সেট করেননি।</p>}
+            <button onClick={()=>setTab("activate")} style={{width:"100%",background:"linear-gradient(135deg,#00ff9d,#00cc7a)",border:"none",borderRadius:12,padding:"14px",cursor:"pointer",color:"#040e08",fontWeight:900,fontSize:14}}>🔑 Key Activate করুন →</button>
+          </div>
+        )}
+        {tab==="activate"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:11}}>
+            <div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.1)",borderRadius:12,padding:"13px 14px"}}>
+              <p style={{color:"#00ff9d",fontWeight:800,fontSize:12,marginBottom:6}}>🔑 License Key Activate করুন</p>
+              <p style={{color:"#334455",fontSize:11,lineHeight:1.8}}>Payment এর পর admin আপনাকে একটি key পাঠাবে। নিচে সেই key টি দিন।</p>
+            </div>
+            <input value={lk} onChange={e=>setLk(e.target.value.toUpperCase())} placeholder="PIQ-W-XXXX-XXXX-XXXX" onKeyDown={e=>e.key==="Enter"&&doAct()}
+              style={{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(0,255,157,0.22)",borderRadius:10,padding:"13px 14px",color:"#00ff9d",fontWeight:800,fontSize:14,outline:"none",letterSpacing:1.5,fontFamily:"monospace",textAlign:"center"}}/>
+            {msg&&<p style={{color:msgOk?"#00ff9d":"#ff6b6b",fontSize:12,fontWeight:700,textAlign:"center"}}>{msg}</p>}
+            <button onClick={doAct} style={{width:"100%",background:"linear-gradient(135deg,#00ff9d,#00cc7a)",border:"none",borderRadius:12,padding:"14px",cursor:"pointer",color:"#040e08",fontWeight:900,fontSize:15}}>✅ Activate করুন</button>
+            <p style={{color:"#1a2a34",fontSize:10,textAlign:"center"}}>Key format: PIQ-W/M/L-XXXX-XXXX-XXXX</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Manage Modal ──
+function ManageModal({onClose,onRefresh}){
+  const up=getUserPlan();
+  const [conf,setConf]=useState(false);
+  const revoke=()=>{saveUserPlan(null);onRefresh&&onRefresh();onClose();window.location.reload();};
+  const expiresIn=up?.expiresAt?Math.ceil((new Date(up.expiresAt)-new Date())/86400000):null;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{width:"100%",maxWidth:340,background:"#0c1118",borderRadius:22,border:"1px solid rgba(255,193,7,0.2)",padding:"26px 22px",animation:"fadeUp .3s ease"}}>
+        <div style={{textAlign:"center",marginBottom:18}}>
+          <div style={{fontSize:48,marginBottom:10}}>⭐</div>
+          <h2 style={{color:"#ffc107",fontSize:19,fontWeight:900,margin:"0 0 5px"}}>Premium Active</h2>
+          <p style={{color:"#334455",fontSize:12}}>{up?.type==="lifetime"?"Lifetime ♾️":up?.type==="monthly"?"Monthly 📆":"Weekly 📅"}</p>
+          {expiresIn!==null&&<p style={{color:"#00ff9d",fontSize:14,fontWeight:700,marginTop:6}}>{expiresIn} দিন বাকি</p>}
+          {up?.activatedAt&&<p style={{color:"#1a2a34",fontSize:10,marginTop:4}}>Activated: {up.activatedAt.slice(0,10)}</p>}
+        </div>
+        <button onClick={onClose} style={{width:"100%",marginBottom:9,background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",borderRadius:11,padding:"13px",cursor:"pointer",color:"#060a10",fontWeight:900,fontSize:14}}>✅ Close</button>
+        {!conf
+          ?<button onClick={()=>setConf(true)} style={{width:"100%",background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.16)",color:"#ff6060",borderRadius:11,padding:"11px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️ Plan Remove করুন</button>
+          :<div style={{display:"flex",gap:8}}><button onClick={revoke} style={{flex:1,background:"rgba(255,77,77,0.12)",border:"1px solid rgba(255,77,77,0.28)",color:"#ff4d4d",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:800,fontSize:13}}>হ্যাঁ, Remove</button><button onClick={()=>setConf(false)} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#667788",borderRadius:10,padding:"11px",cursor:"pointer",fontSize:13}}>বাতিল</button></div>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ── No Config Screen ──
+function NoConfig(){
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:"#060a10"}}>
+      <div style={{textAlign:"center",maxWidth:320}}>
+        <div style={{width:70,height:70,borderRadius:20,background:"rgba(255,193,7,0.1)",border:"1.5px solid rgba(255,193,7,0.22)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,margin:"0 auto 16px"}}>⚙️</div>
+        <h2 style={{color:"#fff",fontSize:20,fontWeight:900,marginBottom:10}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></h2>
+        <div style={{background:"rgba(255,193,7,0.05)",border:"1px solid rgba(255,193,7,0.15)",borderRadius:14,padding:"16px"}}>
+          <p style={{color:"#ffc107",fontWeight:800,fontSize:13,marginBottom:7}}>⚠️ AI সেট নেই</p>
+          <p style={{color:"#445566",fontSize:12,lineHeight:1.7}}>Admin panel এ login করে AI provider সেট করুন।</p>
+        </div>
+        <p style={{color:"#1a2a34",fontSize:10,marginTop:10}}>admin.html → Login → Provider Set → Save</p>
+      </div>
+    </div>
+  );
+}
+
+function HistoryTab({pv}){
+  const [hist,setHist]=useState(()=>getHistory());
+  const [filter,setFilter]=useState("all");
+  const [view,setView]=useState("list");
+  const [markingId,setMarkingId]=useState(null);
+  const [showClear,setShowClear]=useState(false);
+
+  const refresh=()=>setHist([...getHistory()]);
+
+  const doMark=(id,won)=>{
+    updateResult(id,won);
+    setMarkingId(null);
+    refresh();
+  };
+
+  const doClear=()=>{
+    localStorage.removeItem(HIST_KEY);
+    setShowClear(false);
+    refresh();
+  };
+
+  const filtered=hist.filter(h=>{
+    if(filter==="pending"&&h.result!==null)return false;
+    if(filter==="win"&&h.result!==true)return false;
+    if(filter==="loss"&&h.result!==false)return false;
+    return true;
+  });
+
+  const stats=calcStats(hist);
+
+  const fmtTime=(ts)=>{
+    const diff=Date.now()-ts;
+    if(diff<3600000)return Math.round(diff/60000)+"m আগে";
+    if(diff<86400000)return Math.round(diff/3600000)+"h আগে";
+    return new Date(ts).toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+  };
+
+  const AC=stats.acc;
+  const acColor=AC>=70?"#00ff9d":AC>=50?"#ffc107":"#ff4d4d";
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:11}}>
+
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,rgba(139,92,246,0.13),rgba(59,130,246,0.06))",border:"1px solid rgba(139,92,246,0.22)",borderRadius:18,padding:"16px 15px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:13}}>
+          <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,rgba(139,92,246,0.35),rgba(59,130,246,0.2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:21}}>📈</div>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontSize:16,fontWeight:900}}>Prediction <span style={{color:"#a78bfa"}}>History</span></div>
+            <div style={{color:"#445566",fontSize:11,marginTop:1}}>Track · Analyze · Improve</div>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+          {[
+            {l:"Total",v:stats.total,c:"#a78bfa",icon:"🎯"},
+            {l:"Win",v:stats.wins,c:"#00ff9d",icon:"✅"},
+            {l:"Loss",v:stats.settled-stats.wins,c:"#ff4d4d",icon:"❌"},
+            {l:"Rate",v:stats.settled?AC+"%":"—",c:acColor,icon:"📊"},
+          ].map(s=>(
+            <div key={s.l} style={{background:"rgba(0,0,0,0.35)",borderRadius:10,padding:"9px 4px",textAlign:"center",border:"1px solid rgba(255,255,255,0.04)"}}>
+              <div style={{fontSize:13,marginBottom:2}}>{s.icon}</div>
+              <div style={{color:s.c,fontSize:15,fontWeight:900,fontFamily:"monospace"}}>{s.v}</div>
+              <div style={{color:"#2a3a44",fontSize:8,fontWeight:700,letterSpacing:0.5}}>{s.l.toUpperCase()}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* View toggle */}
+      <div style={{display:"flex",gap:6,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4}}>
+        {["list","stats"].map(v=>(
+          <button key={v} onClick={()=>setView(v)}
+            style={{flex:1,padding:"9px 0",borderRadius:9,border:"none",background:view===v?"rgba(139,92,246,0.18)":"transparent",color:view===v?"#a78bfa":"#445566",fontWeight:view===v?800:500,fontSize:12,cursor:"pointer",transition:"all .15s"}}>
+            {v==="list"?"📋 List":"📊 Stats"}
+          </button>
+        ))}
+      </div>
+
+      {/* STATS VIEW */}
+      {view==="stats"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {stats.settled===0?(
+            <div style={{textAlign:"center",padding:"44px 20px",background:"rgba(255,255,255,0.015)",borderRadius:16,border:"1px solid rgba(255,255,255,0.04)"}}>
+              <div style={{fontSize:42,marginBottom:11}}>📊</div>
+              <p style={{color:"#c8d8e8",fontWeight:700,fontSize:14,marginBottom:6}}>এখনো কোনো Result নেই</p>
+              <p style={{color:"#2a3a44",fontSize:11,lineHeight:1.8}}>Prediction নিন → List এ Win/Loss mark করুন → এখানে statistics আসবে</p>
+            </div>
+          ):(
+            <>
+              {/* Accuracy circle */}
+              <div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(139,92,246,0.15)",borderRadius:16,padding:"18px 15px",display:"flex",alignItems:"center",gap:15}}>
+                <div style={{position:"relative",width:88,height:88,flexShrink:0}}>
+                  <svg width={88} height={88} style={{transform:"rotate(-90deg)",position:"absolute"}}>
+                    <circle cx={44} cy={44} r={36} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={7}/>
+                    <circle cx={44} cy={44} r={36} fill="none" stroke={acColor} strokeWidth={7}
+                      strokeDasharray={`${(AC/100)*2*Math.PI*36} ${2*Math.PI*36}`}
+                      strokeLinecap="round"
+                      style={{filter:`drop-shadow(0 0 8px ${acColor}66)`,transition:"stroke-dasharray 1.2s ease"}}
+                    />
+                  </svg>
+                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <span style={{color:acColor,fontSize:17,fontWeight:900,fontFamily:"monospace"}}>{AC}%</span>
+                  </div>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{color:"#c8d8e8",fontWeight:800,fontSize:13,marginBottom:3}}>Overall Accuracy</div>
+                  <div style={{color:"#445566",fontSize:11,marginBottom:9}}>{stats.wins} correct / {stats.settled} settled</div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {stats.daily!==null&&<span style={{background:"rgba(0,255,157,0.08)",border:"1px solid rgba(0,255,157,0.2)",color:"#00ff9d",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:12}}>Today: {stats.daily}%</span>}
+                    {stats.weekly!==null&&<span style={{background:"rgba(255,193,7,0.08)",border:"1px solid rgba(255,193,7,0.2)",color:"#ffc107",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:12}}>Week: {stats.weekly}%</span>}
+                    {stats.monthly!==null&&<span style={{background:"rgba(139,92,246,0.08)",border:"1px solid rgba(139,92,246,0.2)",color:"#a78bfa",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:12}}>Month: {stats.monthly}%</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Confidence breakdown */}
+              <div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:14,padding:"13px 14px"}}>
+                <p style={{color:"#c8d8e8",fontWeight:800,fontSize:12,marginBottom:11}}>🎯 Confidence Breakdown</p>
+                {["High","Medium","Low"].map(c=>{
+                  const d=stats.cStats[c];
+                  if(!d||!d.t)return null;
+                  const a=Math.round((d.w/d.t)*100);
+                  const col=c==="High"?"#00ff9d":c==="Medium"?"#ffc107":"#ff8800";
+                  return(
+                    <div key={c} style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+                      <span style={{background:`${col}15`,color:col,fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:10,border:`1px solid ${col}30`,minWidth:48,textAlign:"center"}}>{c}</span>
+                      <div style={{flex:1,background:"rgba(255,255,255,0.05)",borderRadius:4,height:6,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${a}%`,background:`linear-gradient(90deg,${col}55,${col})`,borderRadius:4}}/>
+                      </div>
+                      <span style={{color:col,fontWeight:900,fontSize:11,fontFamily:"monospace",minWidth:34}}>{a}%</span>
+                      <span style={{color:"#2a3a44",fontSize:9}}>{d.t}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Market breakdown */}
+              {Object.keys(stats.mStats).length>0&&(
+                <div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:14,padding:"13px 14px"}}>
+                  <p style={{color:"#c8d8e8",fontWeight:800,fontSize:12,marginBottom:11}}>📊 Market Accuracy</p>
+                  {Object.entries(stats.mStats).sort((a,b)=>(b[1].w/b[1].t)-(a[1].w/a[1].t)).map(([m,d])=>{
+                    const a=Math.round((d.w/d.t)*100);
+                    const col=a>=70?"#00ff9d":a>=50?"#ffc107":"#ff4d4d";
+                    return(
+                      <div key={m} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{color:"#8899aa",fontSize:10,minWidth:95,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m}</span>
+                        <div style={{flex:1,background:"rgba(255,255,255,0.05)",borderRadius:4,height:5,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${a}%`,background:`linear-gradient(90deg,${col}55,${col})`,borderRadius:4}}/>
+                        </div>
+                        <span style={{color:col,fontWeight:800,fontSize:10,minWidth:32,textAlign:"right"}}>{a}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* LIST VIEW */}
+      {view==="list"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+
+          {/* Filter buttons */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {[
+              {k:"all",l:"🔘 All",c:"#a78bfa"},
+              {k:"pending",l:"⏳ Pending",c:"#ffc107"},
+              {k:"win",l:"✅ Win",c:"#00ff9d"},
+              {k:"loss",l:"❌ Loss",c:"#ff4d4d"},
+            ].map(f=>(
+              <button key={f.k} onClick={()=>setFilter(f.k)}
+                style={{padding:"7px 13px",borderRadius:20,border:`1px solid ${filter===f.k?f.c+"55":"rgba(255,255,255,0.06)"}`,background:filter===f.k?`${f.c}12`:"rgba(255,255,255,0.02)",color:filter===f.k?f.c:"#445566",cursor:"pointer",fontSize:11,fontWeight:700,WebkitTapHighlightColor:"transparent"}}>
+                {f.l}
+              </button>
+            ))}
+            {hist.length>0&&(
+              <button onClick={()=>setShowClear(true)}
+                style={{marginLeft:"auto",padding:"7px 11px",borderRadius:20,border:"1px solid rgba(255,77,77,0.15)",background:"rgba(255,77,77,0.05)",color:"#ff6060",cursor:"pointer",fontSize:11,fontWeight:700,WebkitTapHighlightColor:"transparent"}}>
+                🗑️
+              </button>
+            )}
+          </div>
+
+          {/* Clear confirm */}
+          {showClear&&(
+            <div style={{background:"rgba(255,77,77,0.07)",border:"1px solid rgba(255,77,77,0.2)",borderRadius:12,padding:"13px 14px"}}>
+              <p style={{color:"#ff7070",fontWeight:700,fontSize:12,marginBottom:10}}>⚠️ সব history মুছে ফেলবেন?</p>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={doClear} style={{flex:1,background:"rgba(255,77,77,0.15)",border:"1px solid rgba(255,77,77,0.3)",color:"#ff4d4d",borderRadius:9,padding:"9px 0",cursor:"pointer",fontWeight:800,fontSize:12,WebkitTapHighlightColor:"transparent"}}>হ্যাঁ, মুছুন</button>
+                <button onClick={()=>setShowClear(false)} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#8899aa",borderRadius:9,padding:"9px 0",cursor:"pointer",fontWeight:700,fontSize:12,WebkitTapHighlightColor:"transparent"}}>বাতিল</button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty */}
+          {filtered.length===0&&(
+            <div style={{textAlign:"center",padding:"44px 20px",background:"rgba(255,255,255,0.015)",borderRadius:16,border:"1px solid rgba(255,255,255,0.04)"}}>
+              <div style={{fontSize:42,marginBottom:11}}>📭</div>
+              <p style={{color:"#c8d8e8",fontWeight:700,fontSize:14,marginBottom:6}}>{hist.length===0?"কোনো Prediction নেই":"কোনো result পাওয়া যায়নি"}</p>
+              <p style={{color:"#2a3a44",fontSize:11}}>{hist.length===0?"Screenshot বা Manual ট্যাবে prediction নিন":"অন্য filter বেছে নিন"}</p>
+            </div>
+          )}
+
+          {/* Cards */}
+          {filtered.map((h)=>{
+            const conf=h.confidence>=80?"High":h.confidence>=60?"Medium":"Low";
+            const confCol=conf==="High"?"#00ff9d":conf==="Medium"?"#ffc107":"#ff8800";
+            const rCol=h.result===true?"#00ff9d":h.result===false?"#ff4d4d":"#ffc107";
+            const rLabel=h.result===true?"✅ Win":h.result===false?"❌ Loss":"⏳ Pending";
+            const isMarking=markingId===h.id;
+            return(
+              <div key={h.id} style={{background:h.result===true?"rgba(0,255,157,0.03)":h.result===false?"rgba(255,77,77,0.03)":"rgba(255,255,255,0.02)",border:`1px solid ${h.result===true?"rgba(0,255,157,0.12)":h.result===false?"rgba(255,77,77,0.12)":"rgba(255,255,255,0.06)"}`,borderRadius:14,padding:"13px 13px",position:"relative",overflow:"hidden"}}>
+                {h.result===true&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#00ff9d55,transparent)"}}/>}
+                {h.result===false&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#ff4d4d55,transparent)"}}/>}
+
+                {/* Match + result badge */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:7}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#fff",fontWeight:800,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.match}</div>
+                    <div style={{color:"#445566",fontSize:9,marginTop:2}}>{h.league} · {fmtTime(h.time)}</div>
+                  </div>
+                  <span style={{color:rCol,fontSize:10,fontWeight:800,background:`${rCol}12`,border:`1px solid ${rCol}28`,padding:"4px 9px",borderRadius:10,flexShrink:0}}>{rLabel}</span>
+                </div>
+
+                {/* Tags */}
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:h.result===null?10:0}}>
+                  <span style={{background:"rgba(139,92,246,0.12)",color:"#a78bfa",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:9,border:"1px solid rgba(139,92,246,0.22)"}}>{h.market}</span>
+                  <span style={{background:"rgba(255,255,255,0.05)",color:"#c8d8e8",fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:9}}>{h.prediction}</span>
+                  <span style={{background:`${confCol}12`,color:confCol,fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:9,border:`1px solid ${confCol}28`}}>{conf} {h.prob}%</span>
+                </div>
+
+                {/* Mark result */}
+                {h.result===null&&(
+                  isMarking?(
+                    <div style={{display:"flex",gap:7}}>
+                      <button onTouchEnd={(e)=>{e.preventDefault();doMark(h.id,true);}} onClick={()=>doMark(h.id,true)}
+                        style={{flex:1,background:"rgba(0,255,157,0.1)",border:"1px solid rgba(0,255,157,0.28)",color:"#00ff9d",borderRadius:10,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:900,WebkitTapHighlightColor:"transparent"}}>
+                        ✅ Win
+                      </button>
+                      <button onTouchEnd={(e)=>{e.preventDefault();doMark(h.id,false);}} onClick={()=>doMark(h.id,false)}
+                        style={{flex:1,background:"rgba(255,77,77,0.1)",border:"1px solid rgba(255,77,77,0.28)",color:"#ff4d4d",borderRadius:10,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:900,WebkitTapHighlightColor:"transparent"}}>
+                        ❌ Loss
+                      </button>
+                      <button onTouchEnd={(e)=>{e.preventDefault();setMarkingId(null);}} onClick={()=>setMarkingId(null)}
+                        style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",color:"#445566",borderRadius:10,padding:"10px 12px",cursor:"pointer",fontSize:12,WebkitTapHighlightColor:"transparent"}}>
+                        ✕
+                      </button>
+                    </div>
+                  ):(
+                    <button onTouchEnd={(e)=>{e.preventDefault();setMarkingId(h.id);}} onClick={()=>setMarkingId(h.id)}
+                      style={{width:"100%",background:"rgba(255,193,7,0.06)",border:"1px solid rgba(255,193,7,0.18)",color:"#ffc107",borderRadius:10,padding:"9px 0",cursor:"pointer",fontSize:11,fontWeight:700,WebkitTapHighlightColor:"transparent"}}>
+                      ⚡ Result আপডেট করুন
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function SlipTab({cfg}){
+  const SLIP_MARKETS=getDynamicSlipMarkets();
+  const defaultMarket=SLIP_MARKETS[0]||"1X2 Home Win";
+  const [sms,setSms]=useState([]);
+  const [form,setForm]=useState({teamA:"",teamB:"",market:defaultMarket,odds:""});
+  const [stake,setStake]=useState("");
+  const [an,setAn]=useState(null);
+  const [load,setLoad]=useState(false);
+  const [msg,setMsg]=useState("");
+  const [er,setEr]=useState(null);
+  const cp=combinedProb(sms);const ri=slipRisk(cp);
+  const tot=sms.reduce((p,m)=>p*parseFloat(m.odds||1),1);
+  const ret=stake?Math.round(parseFloat(stake)*tot*100)/100:null;
+  const addM=()=>{if(!form.teamA.trim()||!form.teamB.trim()||!form.odds)return;setSms(m=>[...m,{...form,prob:oddsToProb(form.odds),id:Date.now()}]);setForm(f=>({...f,teamA:"",teamB:"",odds:""}));setAn(null);setEr(null);};
+  const rmM=i=>{setSms(m=>m.filter((_,j)=>j!==i));setAn(null);};
+  const run=async()=>{if(!sms.length){setEr("Match যোগ করুন।");return;}setLoad(true);setEr(null);setAn(null);try{setMsg("🤖 AI বিশ্লেষণ করছে...");setAn(await _predSlipAI(sms));}catch(e){setEr(e.message);}setLoad(false);setMsg("");};
+  const wip=i=>combinedProb(sms.filter((_,j)=>j!==i));
+  const vc=an?VC[an.verdict]||"#ffc107":"#ffc107";
+  const fc={Safe:"#00ff9d",Moderate:"#ffc107",Risky:"#ff8800","Very Risky":"#ff4d4d"};
+  const INP={background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:8,padding:"9px 10px",color:"#e0e6f0",fontSize:12,outline:"none",width:"100%"};
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {/* Hero */}
+      <div style={{background:"linear-gradient(135deg,rgba(255,193,7,0.07),rgba(255,152,0,0.03))",border:"1px solid rgba(255,193,7,0.12)",borderRadius:15,padding:"15px 16px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}><div style={{width:38,height:38,borderRadius:11,background:"rgba(255,193,7,0.12)",border:"1px solid rgba(255,193,7,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📊</div><div><h2 style={{color:"#fff",fontSize:15,fontWeight:900,margin:0}}>BetSlip <span style={{color:"#ffc107"}}>Analyzer</span></h2><p style={{color:"#334455",fontSize:10,margin:0}}>Risk Assessment · Weak Match · Smart Suggestions</p></div></div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{["⚠️ Risk","💡 Suggestions","🔮 What-If","💰 Stake Advice"].map(f=><span key={f} style={{background:"rgba(255,193,7,0.07)",border:"1px solid rgba(255,193,7,0.12)",borderRadius:20,padding:"2px 8px",fontSize:9,color:"#ffc107",fontWeight:600}}>{f}</span>)}</div>
+      </div>
+      {/* Add form */}
+      <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:13,padding:13}}>
+        <p style={{color:"#ffc107",fontWeight:800,fontSize:12,margin:"0 0 10px"}}>➕ Match যোগ করুন</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}><input placeholder="Team A" value={form.teamA} onChange={e=>setForm(f=>({...f,teamA:e.target.value}))} style={INP}/><input placeholder="Team B" value={form.teamB} onChange={e=>setForm(f=>({...f,teamB:e.target.value}))} style={INP}/></div>
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6,marginBottom:form.odds&&parseFloat(form.odds)>1?6:10}}>
+          <div style={{position:"relative"}}><select value={form.market} onChange={e=>setForm(f=>({...f,market:e.target.value}))} style={{...INP,paddingRight:26,cursor:"pointer"}}>{SLIP_MARKETS.map(m=><option key={m} value={m} style={{background:"#0a0f1a"}}>{m}</option>)}</select><span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:"#2a3a44",pointerEvents:"none",fontSize:9}}>▼</span></div>
+          <input placeholder="Odds 1.85" value={form.odds} onChange={e=>setForm(f=>({...f,odds:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addM()} type="number" step="0.01" min="1.01" style={INP}/>
+        </div>
+        {form.odds&&parseFloat(form.odds)>1&&<p style={{color:"#1a2a34",fontSize:9,marginBottom:8}}>Prob: <span style={{color:"#00ff9d",fontWeight:700}}>{oddsToProb(form.odds)}%</span></p>}
+        <button onClick={addM} disabled={!form.teamA.trim()||!form.teamB.trim()||!form.odds} style={{width:"100%",background:form.teamA&&form.teamB&&form.odds?"linear-gradient(135deg,#ffc107,#ff9800)":"rgba(255,193,7,0.06)",border:"none",borderRadius:8,padding:"10px",cursor:form.teamA&&form.teamB&&form.odds?"pointer":"not-allowed",color:form.teamA&&form.teamB&&form.odds?"#060a10":"#2a3a44",fontWeight:900,fontSize:12}}>➕ Slip এ যোগ করুন</button>
+      </div>
+      {/* Overview */}
+      {sms.length>0&&<div style={{background:`linear-gradient(135deg,${ri.color}04,transparent)`,border:`1.5px solid ${ri.color}20`,borderRadius:13,padding:13}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:9}}><div><p style={{color:"#1a2a34",fontSize:9,fontWeight:700,letterSpacing:1,margin:"0 0 3px"}}>SLIP OVERVIEW</p><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{color:"#fff",fontSize:14,fontWeight:900}}>{sms.length} Selections</span><span style={{color:ri.color,fontSize:20,fontWeight:900,fontFamily:"monospace"}}>{cp}%</span><Tag t={`${ri.icon} ${ri.level}`} c={ri.color}/></div></div><Ring val={cp} size={68} color={ri.color} label="WIN"/></div>
+        <Bar v={cp} c={ri.color} h={6}/>
+        <div style={{marginTop:9,display:"flex",gap:6}}><input placeholder="Stake ৳" value={stake} onChange={e=>setStake(e.target.value)} type="number" style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:7,padding:"8px 10px",color:"#e0e6f0",fontSize:11,outline:"none"}}/>{ret&&<div style={{background:"rgba(0,255,157,0.05)",border:"1px solid rgba(0,255,157,0.1)",borderRadius:7,padding:"8px 12px",flexShrink:0,textAlign:"center"}}><p style={{color:"#1a3a28",fontSize:8,fontWeight:700}}>RETURN</p><p style={{color:"#00ff9d",fontSize:14,fontWeight:900,fontFamily:"monospace"}}>৳{ret}</p></div>}</div>
+      </div>}
+      {/* Items */}
+      {sms.length>0&&<div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><p style={{color:"#1a2a34",fontSize:9,fontWeight:700,letterSpacing:1}}>BET SLIP</p><button onClick={()=>{setSms([]);setAn(null);setEr(null);}} style={{background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.12)",color:"#ff6060",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontSize:9}}>🗑️</button></div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {sms.map((m,i)=>{const ma=an?.matchAnalysis?.[i];const fcc=fc[ma?.flag]||"#334455";const iw=an&&an.weakestMatchIndex===i;return(
+            <div key={m.id} style={{background:iw?"rgba(255,77,77,0.03)":"rgba(255,255,255,0.018)",border:`1.5px solid ${iw?"rgba(255,77,77,0.18)":fcc+"18"}`,borderRadius:10,padding:"10px 11px",position:"relative"}}>
+              {iw&&<span style={{position:"absolute",top:-7,left:10,background:"linear-gradient(90deg,#ff4d4d,#ff8800)",color:"#fff",fontSize:7,fontWeight:900,padding:"1px 7px",borderRadius:20}}>⚠️ WEAKEST</span>}
+              <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",gap:4,alignItems:"center",marginBottom:3,flexWrap:"wrap"}}><span style={{background:"rgba(255,255,255,0.04)",color:"#334455",fontSize:8,fontWeight:700,padding:"1px 5px",borderRadius:20}}>#{i+1}</span>{ma?.flag&&<Tag t={ma.flag} c={fcc} sm/>}</div>
+                  <p style={{color:"#fff",fontSize:12,fontWeight:800,margin:"0 0 2px"}}>{m.teamA} vs {m.teamB}</p>
+                  <p style={{color:"#445566",fontSize:9,margin:"0 0 4px"}}>{m.market}</p>
+                  <div style={{display:"flex",gap:8}}><span style={{color:"#ffc107",fontSize:9,fontWeight:700}}>Odds:{m.odds}</span><span style={{color:"#00ff9d",fontSize:9,fontWeight:700}}>Prob:{m.prob}%</span></div>
+                  {ma?.reason&&<p style={{color:"#1e2e3a",fontSize:9,margin:"5px 0 0",lineHeight:1.5}}>💡 {ma.reason}</p>}
+                  {ma?.alternative&&ma.alternative.length>2&&<div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.09)",borderRadius:5,padding:"3px 7px",marginTop:4}}><p style={{color:"#00ff9d",fontSize:9,fontWeight:700}}>✅ {ma.alternative}</p></div>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"center",flexShrink:0}}>
+                  <Ring val={m.prob} size={46} color={m.prob>=60?"#00ff9d":m.prob>=45?"#ffc107":"#ff4d4d"}/>
+                  <button onClick={()=>rmM(i)} style={{background:"rgba(255,77,77,0.07)",border:"1px solid rgba(255,77,77,0.13)",color:"#ff6060",borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:8,fontWeight:600}}>✕</button>
+                </div>
+              </div>
+            </div>
+          );})}
+        </div>
+      </div>}
+      {sms.length>0&&<button onClick={run} disabled={load} style={{width:"100%",background:load?"rgba(255,193,7,0.06)":"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",borderRadius:10,padding:"12px",cursor:load?"not-allowed":"pointer",color:load?"#2a3a44":"#060a10",fontWeight:900,fontSize:13,opacity:load?0.6:1}}>{load?msg||"⏳ বিশ্লেষণ করছি...":"🤖 AI দিয়ে Slip বিশ্লেষণ করুন"}</button>}
+      <Err msg={er}/>
+      {an&&<div style={{display:"flex",flexDirection:"column",gap:11,animation:"fadeUp .4s ease"}}>
+        {/* Verdict */}
+        <div style={{background:`linear-gradient(135deg,${vc}06,${vc}02)`,border:`2px solid ${vc}25`,borderRadius:14,padding:16}}>
+          <p style={{color:"#1a2a34",fontSize:9,fontWeight:700,letterSpacing:1,margin:"0 0 5px"}}>AI VERDICT</p>
+          <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:11}}>
+            <div style={{flex:1,minWidth:0}}><h2 style={{color:vc,fontSize:15,fontWeight:900,margin:"0 0 7px"}}>{an.verdict}</h2><p style={{color:"#5a7a8a",fontSize:11,lineHeight:1.7,margin:"0 0 9px"}}>{an.summary}</p><div style={{display:"flex",gap:5,flexWrap:"wrap"}}><Tag t={`${an.riskLevel} Risk`} c={vc}/><Tag t={`🎯 ${an.confidenceScore}%`} c="#3b9eff"/><Tag t={`${cp}%`} c={ri.color}/></div></div>
+            <div style={{display:"flex",gap:10,flexShrink:0}}><Ring val={cp} size={66} color={vc} label="WIN"/><Ring val={an.confidenceScore} size={66} color="#3b9eff" label="CONF"/></div>
+          </div>
+          <Bar v={an.confidenceScore} c={vc} h={7}/>
+        </div>
+        {/* Suggestions */}
+        {an.suggestions?.length>0&&<div style={{background:"rgba(0,255,157,0.03)",border:"1px solid rgba(0,255,157,0.09)",borderRadius:12,padding:13}}><p style={{color:"#00ff9d",fontWeight:800,fontSize:11,margin:"0 0 10px"}}>💡 AI Suggestions</p><div style={{display:"flex",flexDirection:"column",gap:7}}>{an.suggestions.map((s,i)=><div key={i} style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{background:"rgba(0,255,157,0.09)",color:"#00ff9d",fontSize:8,fontWeight:900,padding:"2px 5px",borderRadius:20,flexShrink:0,marginTop:2}}>{i+1}</span><p style={{color:"#5a7a8a",fontSize:11,lineHeight:1.6,margin:0}}>{s}</p></div>)}</div></div>}
+        {/* What-If */}
+        {an.whatIf?.length>0&&<div style={{background:"rgba(59,158,255,0.03)",border:"1px solid rgba(59,158,255,0.09)",borderRadius:12,padding:13}}><p style={{color:"#3b9eff",fontWeight:800,fontSize:11,margin:"0 0 10px"}}>🔮 What-If Simulator</p><div style={{display:"flex",flexDirection:"column",gap:7}}>{an.whatIf.map((w,i)=>{const mm=sms[w.removeIdx];if(!mm)return null;const np=wip(w.removeIdx);const g=Math.round((np-cp)*10)/10;return(<div key={i} style={{background:"rgba(59,158,255,0.03)",border:"1px solid rgba(59,158,255,0.08)",borderRadius:9,padding:"10px 11px"}}><div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}><div style={{flex:1}}><p style={{color:"#c8d8e8",fontSize:11,fontWeight:700,margin:"0 0 2px"}}>{mm.teamA} vs {mm.teamB} সরালে:</p><p style={{color:"#3a5060",fontSize:10,margin:"0 0 4px"}}>{mm.market} · Odds {mm.odds}</p><p style={{color:"#334455",fontSize:10,lineHeight:1.5,marginBottom:5}}>{w.benefit}</p><span style={{display:"inline-block",background:w.shouldRemove?"rgba(0,255,157,0.07)":"rgba(255,77,77,0.06)",color:w.shouldRemove?"#00ff9d":"#ff6060",fontSize:8,fontWeight:800,padding:"1px 7px",borderRadius:20,border:`1px solid ${w.shouldRemove?"rgba(0,255,157,0.18)":"rgba(255,77,77,0.18)"}`}}>{w.shouldRemove?"✅ Remove করুন":"❌ রাখুন"}</span></div><div style={{textAlign:"center",flexShrink:0}}><p style={{color:"#3b9eff",fontSize:8,fontWeight:700,margin:"0 0 2px"}}>NEW</p><p style={{color:g>0?"#00ff9d":"#ff4d4d",fontSize:19,fontWeight:900,fontFamily:"monospace",margin:"0 0 1px"}}>{np}%</p><p style={{color:g>0?"#00ff9d":"#ff4d4d",fontSize:10,fontWeight:700}}>{g>0?"+":""}{g}%</p></div></div></div>);})}</div></div>}
+        {/* Stake */}
+        <div style={{background:"rgba(255,193,7,0.03)",border:"1px solid rgba(255,193,7,0.09)",borderRadius:12,padding:13}}><p style={{color:"#ffc107",fontWeight:800,fontSize:11,margin:"0 0 7px"}}>💰 Stake & Profit</p><p style={{color:"#5a7a8a",fontSize:11,lineHeight:1.7,margin:"0 0 5px"}}><span style={{color:"#ffc107",fontWeight:700}}>Stake: </span>{an.stakeAdvice}</p><p style={{color:"#5a7a8a",fontSize:11,lineHeight:1.7}}><span style={{color:"#ffc107",fontWeight:700}}>Profit vs Risk: </span>{an.profitVsRisk}</p></div>
+        <div style={{background:"rgba(255,77,77,0.02)",border:"1px solid rgba(255,77,77,0.06)",borderRadius:9,padding:"9px 11px"}}><p style={{color:"rgba(255,77,77,0.45)",fontSize:9,lineHeight:1.6}}>⚠️ <strong style={{color:"rgba(255,77,77,0.6)"}}>Responsible Gambling:</strong> এই বিশ্লেষণ decision-support। কোনো result guaranteed নয়।</p></div>
+      </div>}
+    </div>
+  );
+}
+
+// ── Bottom Navigation Bar ──
+function BottomNav({tab,setTab,pv,accumLen}){
+  const prem=isPremium();
+  const {ok,used,limit}=canPredict();
+  const left=limit-(used||0);
+  const navItems=[
+    {id:"home",  icon:"🏠", label:"Home"},
+    {id:"upload",icon:"📸", label:"Predict", badge:"AI", badgeColor:"#ff4d4d"},
+    {id:"slip",  icon:"📊", label:"BetSlip"},
+    {id:"history",icon:"📈",label:"Stats"},
+    {id:"profile",icon:"👤",label:"Profile"},
+  ];
+  return(
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:500,background:"rgba(6,10,16,0.97)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:"1px solid rgba(255,255,255,0.06)",padding:"8px 0 env(safe-area-inset-bottom,8px)"}}>
+      <div style={{display:"flex",maxWidth:600,margin:"0 auto"}}>
+        {navItems.map(item=>{
+          const active=tab===item.id||(item.id==="home"&&(tab==="upload"||tab==="manual"||tab==="accumulator"));
+          const color=active?pv.color:"#445566";
+          return(
+            <button key={item.id} onClick={()=>{
+              if(item.id==="home")setTab("upload");
+              else if(item.id==="profile")setTab("profile");
+              else setTab(item.id);
+            }} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 0",background:"none",border:"none",cursor:"pointer",position:"relative",WebkitTapHighlightColor:"transparent"}}>
+              {/* Badge */}
+              {item.badge&&<span style={{position:"absolute",top:2,left:"50%",transform:"translateX(4px)",background:item.badgeColor,color:"#fff",fontSize:8,fontWeight:900,padding:"1px 5px",borderRadius:20,lineHeight:1.4}}>{item.badge}</span>}
+              {/* Accumulator count badge */}
+              {item.id==="slip"&&accumLen>0&&<span style={{position:"absolute",top:2,right:"22%",background:"#ffc107",color:"#060a10",fontSize:8,fontWeight:900,padding:"1px 5px",borderRadius:20,lineHeight:1.4}}>{accumLen}</span>}
+              {/* Free limit badge */}
+              {item.id==="home"&&!prem&&ok&&left<=1&&left>0&&<span style={{position:"absolute",top:2,right:"20%",background:"#ff8800",color:"#fff",fontSize:7,fontWeight:900,padding:"1px 5px",borderRadius:20,lineHeight:1.4}}>{left}</span>}
+              <span style={{fontSize:20,lineHeight:1,filter:active?"none":"grayscale(0.5) opacity(0.5)"}}>{item.icon}</span>
+              <span style={{fontSize:9,fontWeight:active?800:500,color,transition:"color .15s",letterSpacing:0.2}}>{item.label}</span>
+              {active&&<div style={{position:"absolute",bottom:-8,left:"50%",transform:"translateX(-50%)",width:20,height:2.5,background:pv.color,borderRadius:2,boxShadow:`0 0 8px ${pv.color}`}}/>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Profile Tab ──
+function ProfileTab({pv,onUpgrade,onManage}){
+  const prem=isPremium();const up=getUserPlan();
+  const {ok,used,limit}=canPredict();
+  const expiresIn=up?.expiresAt?Math.ceil((new Date(up.expiresAt)-new Date())/86400000):null;
+  const hist=getHistory();const stats=calcStats(hist);
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:11}}>
+      {/* Plan card */}
+      <div style={{background:prem?"linear-gradient(135deg,rgba(255,193,7,0.1),rgba(255,152,0,0.04))":"linear-gradient(135deg,rgba(59,158,255,0.08),rgba(59,158,255,0.02))",border:`1px solid ${prem?"rgba(255,193,7,0.22)":"rgba(59,158,255,0.18)"}`,borderRadius:18,padding:"20px 16px",textAlign:"center"}}>
+        <div style={{fontSize:44,marginBottom:10}}>{prem?"⭐":"🆓"}</div>
+        <h2 style={{color:prem?"#ffc107":"#3b9eff",fontSize:20,fontWeight:900,margin:"0 0 5px"}}>{prem?"Premium Plan":"Free Plan"}</h2>
+        {prem?(
+          <div>
+            <p style={{color:"#8899aa",fontSize:12,margin:"0 0 8px"}}>{up?.type==="lifetime"?"Lifetime Access ♾️":up?.type==="monthly"?"Monthly Plan 📆":"Weekly Plan 📅"}</p>
+            {expiresIn!==null&&<p style={{color:"#00ff9d",fontSize:13,fontWeight:700,margin:"0 0 12px"}}>{expiresIn} দিন বাকি</p>}
+            <button onClick={onManage} style={{background:"rgba(255,193,7,0.1)",border:"1px solid rgba(255,193,7,0.28)",color:"#ffc107",borderRadius:10,padding:"9px 22px",cursor:"pointer",fontSize:12,fontWeight:700}}>Manage Plan</button>
+          </div>
+        ):(
+          <div>
+            <p style={{color:"#8899aa",fontSize:12,margin:"0 0 5px"}}>{used||0}/{limit} আজ ব্যবহার হয়েছে</p>
+            <div style={{background:"rgba(255,255,255,0.04)",borderRadius:20,height:6,overflow:"hidden",maxWidth:200,margin:"0 auto 12px"}}>
+              <div style={{height:"100%",width:`${Math.min(100,((used||0)/limit)*100)}%`,background:"linear-gradient(90deg,#3b9eff,#00ff9d)",borderRadius:20}}/>
+            </div>
+            <button onClick={onUpgrade} style={{background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",color:"#060a10",borderRadius:10,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:900}}>⭐ Upgrade to Premium</button>
+          </div>
+        )}
+      </div>
+
+      {/* Quick stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
+        {[{l:"Predictions",v:stats.total,c:"#a78bfa",i:"🎯"},{l:"Win Rate",v:stats.settled?stats.acc+"%":"—",c:"#00ff9d",i:"📊"},{l:"Wins",v:stats.wins,c:"#ffc107",i:"✅"}].map(s=>(
+          <div key={s.l} style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${s.c}15`,borderRadius:12,padding:"12px 6px",textAlign:"center"}}>
+            <div style={{fontSize:18,marginBottom:4}}>{s.i}</div>
+            <div style={{color:s.c,fontSize:18,fontWeight:900,fontFamily:"monospace"}}>{s.v}</div>
+            <div style={{color:"#1a2a34",fontSize:8,fontWeight:700,marginTop:2}}>{s.l.toUpperCase()}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Premium features comparison */}
+      {!prem&&<div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:14,padding:"14px 16px"}}>
+        <p style={{color:"#c8d8e8",fontWeight:800,fontSize:13,marginBottom:12}}>Free vs Premium</p>
+        {[
+          {f:"Daily Predictions",free:`${limit}/day`,prem:"Unlimited"},
+          {f:"Screenshot Analysis",free:"✅",prem:"✅"},
+          {f:"Advanced AI",free:"Basic",prem:"Advanced"},
+          {f:"Arbitrage Detection",free:"❌",prem:"✅"},
+          {f:"Odds Comparison",free:"❌",prem:"✅"},
+          {f:"Ads",free:"Yes",prem:"No Ads"},
+        ].map(r=>(
+          <div key={r.f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+            <span style={{color:"#8899aa",fontSize:11}}>{r.f}</span>
+            <div style={{display:"flex",gap:10}}>
+              <span style={{color:"#334455",fontSize:10,fontWeight:600,minWidth:50,textAlign:"center"}}>{r.free}</span>
+              <span style={{color:"#ffc107",fontSize:10,fontWeight:700,minWidth:60,textAlign:"center"}}>{r.prem}</span>
+            </div>
+          </div>
+        ))}
+        <button onClick={onUpgrade} style={{width:"100%",marginTop:12,background:"linear-gradient(135deg,#ffc107,#ff9800)",border:"none",borderRadius:10,padding:"12px",cursor:"pointer",color:"#060a10",fontWeight:900,fontSize:14}}>⭐ Upgrade Now</button>
+      </div>}
+
+      <p style={{textAlign:"center",color:"#1a2a34",fontSize:9,marginTop:4}}>PredictIQ · AI Sports Analysis · শুধু বিনোদন ও গবেষণার জন্য</p>
+    </div>
+  );
+}
+
+// ── MAIN APP ──
+function App(){
+  const {primary,secondary}=getAdminProviders();
+  const hasAI=!!(primary||secondary);
+  if(!hasAI)return <NoConfig/>;
+
+  const activeMeta=primary?PROVIDERS.find(p=>p.id===primary.id):secondary?PROVIDERS.find(p=>p.id===secondary.id):PROVIDERS[0];
+  const pv=activeMeta||PROVIDERS[0];
+
+  // Plan
+  const [planR,setPlanR]=useState(0);
+  const [showUpgrade,setShowUpgrade]=useState(false);
+  const [showManage,setShowManage]=useState(false);
+  const planCfg=getPlanCfg()||defaultPlanCfg();
+
+  // App state
+  const [tab,setTab]=useState(()=>sessionStorage.getItem("piq_tab")||"upload");
+  const switchTab=(t)=>{sessionStorage.setItem("piq_tab",t);setTab(t);};
+  const [sport,setSport]=useState("football");
+  const [tA,setTA]=useState("");const [tB,setTB]=useState("");
+  const [league,setLeague]=useState("");const [sm,setSm]=useState([]);
+  const [prev,setPrev]=useState(null);const [b64,setB64]=useState(null);const [mime,setMime]=useState("image/png");
+  const [drag,setDrag]=useState(false);
+  const [load,setLoad]=useState(false);const [msg,setMsg]=useState("");
+  const [results,setResults]=useState([]);const [manR,setManR]=useState(null);
+  const [accum,setAccum]=useState([]);const [er,setEr]=useState(null);
+  const fRef=useRef();
+
+  const checkLimit=()=>{const r=canPredict();if(!r.ok){setShowUpgrade(true);return false;}return true;};
+  const addAcc=(r)=>{const b=r.predictions?.find(p=>p.best)||r.predictions?.[0];if(!b)return;setAccum(a=>[...a,{match:`${r.teamA} vs ${r.teamB}`,market:`${b.market}: ${b.prediction}`,prob:b.prob,id:Date.now()}]);};
+  const togM=m=>setSm(s=>s.includes(m)?s.filter(x=>x!==m):[...s,m]);
+  const ap=accum.length?Math.round(accum.reduce((p,c)=>p*(c.prob/100),1)*100):0;
+
+  const pf=async(f)=>{if(!f||!f.type.startsWith("image/")){setEr("Image দিন।");return;}setMime(f.type);setPrev(URL.createObjectURL(f));setResults([]);setEr(null);try{setB64(await f2b(f));}catch{setEr("ফাইল পড়া যায়নি।");}};
+  const VP=`Analyze this betting app screenshot carefully. Extract ONLY the matches that are ACTUALLY VISIBLE in the image. Do NOT invent, guess, or add any matches that are not clearly shown. If you see only 1 match, return only 1. If none visible, return empty array []. Respond ONLY as JSON array no markdown: [{"teamA":"<exact team name from image>","teamB":"<exact team name from image>","sport":"<Football|Cricket|Basketball|Tennis|Hockey>","league":"<league if visible>","rawOdds":"<odds if visible>"}]`;
+
+  const runShot=async()=>{
+    if(!b64){setEr("Screenshot দিন।");return;}
+    if(!checkLimit())return;
+    setLoad(true);setEr(null);setResults([]);
+    try{
+      setMsg("📸 Matches খুঁজছি...");
+      const txt=await _visionAdmin(b64,mime,VP);
+      let ms=pa(txt);
+      // Filter out placeholder/fake entries
+      ms=ms.filter(m=>{
+        const a=(m.teamA||"").trim();const b=(m.teamB||"").trim();
+        if(!a||!b)return false;
+        if(a==="<n>"||b==="<n>"||a==="<home>"||b==="<away>")return false;
+        if(a.length<2||b.length<2)return false;
+        return true;
+      });
+      if(!ms?.length){setEr("Screenshot এ কোনো ম্যাচ পাওয়া যায়নি। একটি বেটিং অ্যাপের স্ক্রিনশট দিন যেখানে ম্যাচ দৃশ্যমান।");setLoad(false);return;}
+      const all=[];
+      for(let i=0;i<ms.length;i++){
+        setMsg(`🤖 ${i+1}/${ms.length}: ${ms[i].teamA} vs ${ms[i].teamB}...`);
+        try{const pr=await _predMatchAI(ms[i]);addPrediction(pr);all.push(pr);}
+        catch(e){all.push({...ms[i],error:e.message,predictions:[],winProb:50,confidence:50});}
+      }
+      setResults(all);incTodayCount();setPlanR(r=>r+1);
+    }catch(e){setEr(e.message);}
+    setLoad(false);setMsg("");
+  };
+
+  const runManual=async()=>{
+    if(!tA||!tB){setEr("Team name দিন।");return;}
+    if(!checkLimit())return;
+    setLoad(true);setEr(null);setManR(null);
+    try{
+      setMsg(`🤖 ${tA} vs ${tB}...`);
+      const res=await _predMatchAI({teamA:tA,teamB:tB,sport,league,rawOdds:sm.join(",")});
+      setManR(res);addPrediction(res);incTodayCount();setPlanR(r=>r+1);
+    }catch(e){setEr(e.message);}
+    setLoad(false);setMsg("");
+  };
+
+  const INP={background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"12px 13px",color:"#e0e6f0",fontSize:14,outline:"none",width:"100%"};
+  const BP=(d)=>({background:d?`${pv.color}0d`:`linear-gradient(135deg,${pv.color},${pv.color}cc)`,border:"none",borderRadius:11,padding:"13px",cursor:d?"not-allowed":"pointer",color:d?"#2a3a44":"#fff",fontWeight:900,fontSize:15,width:"100%",opacity:d?0.6:1,boxShadow:d?"none":`0 4px 18px ${pv.color}25`});
+
+  const TABS=[
+    {id:"upload",icon:"📸",label:"Screenshot"},
+    {id:"manual",icon:"✏️",label:"Manual"},
+    {id:"slip",icon:"📊",label:"BetSlip",hc:"#ffc107"},
+    {id:"accumulator",icon:"🔗",label:accum.length?`Accum(${accum.length})`:"Accum"},
+    {id:"history",icon:"📈",label:"History",hc:"#a78bfa"},
+  ];
+
+  return(
+    <div style={{minHeight:"100vh",background:"#060a10",position:"relative"}}>
+      <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(0,255,157,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,157,0.012) 1px,transparent 1px)",backgroundSize:"44px 44px",pointerEvents:"none",zIndex:0}}/>
+      <div style={{position:"relative",zIndex:1,maxWidth:880,margin:"0 auto",padding:"16px 14px 90px"}}>
+
+        {/* Header */}
+        <div style={{textAlign:"center",marginBottom:14}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:11,marginBottom:7}}>
+            <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,#00ff9d11,#00ff9d22)",border:"1.5px solid #00ff9d33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⚡</div>
+            <span style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>Predict<span style={{color:"#00ff9d"}}>IQ</span></span>
+          </div>
+          <p style={{color:"#2a3a44",fontSize:12,marginBottom:8}}>AI Prediction · BetSlip Risk · Multi-Bet</p>
+          <div style={{display:"inline-flex",alignItems:"center",gap:8,background:`${pv.color}0a`,border:`1px solid ${pv.color}20`,borderRadius:22,padding:"5px 14px"}}>
+            <span style={{fontSize:15}}>{pv.icon}</span>
+            <span style={{color:pv.color,fontSize:13,fontWeight:700}}>{pv.name} Powered</span>
+            {secondary&&<span style={{color:"#334455",fontSize:10}}>+ Backup</span>}
+          </div>
+        </div>
+
+        {/* Plan Banner */}
+        <PlanBanner refresh={planR} onUpgrade={()=>setShowUpgrade(true)} onManage={()=>setShowManage(true)}/>
+
+        {/* Sub Nav — shown only for BetSlip/History tabs */}
+        {(tab==="slip"||tab==="history"||tab==="accumulator")&&<div style={{display:"flex",gap:5,marginBottom:16,overflowX:"auto"}}>
+          {[{id:"slip",l:"📊 BetSlip",hc:"#ffc107"},{id:"accumulator",l:`🔗 Accum${accum.length?` (${accum.length})`:""}`,hc:"#00ff9d"},{id:"history",l:"📈 History",hc:"#a78bfa"}].map(t=>(
+            <button key={t.id} onClick={()=>switchTab(t.id)} style={{flexShrink:0,padding:"8px 14px",borderRadius:22,border:`1px solid ${tab===t.id?t.hc+"44":"rgba(255,255,255,0.06)"}`,background:tab===t.id?`${t.hc}12`:"rgba(255,255,255,0.02)",color:tab===t.id?t.hc:"#334455",cursor:"pointer",fontSize:11,fontWeight:tab===t.id?800:500}}>{t.l}</button>
+          ))}
+        </div>}
+
+        {/* Screenshot */}
+        {tab==="upload"&&<div style={{display:"flex",flexDirection:"column",gap:11}}>
+          <div onClick={()=>!load&&fRef.current?.click()} onDrop={e=>{e.preventDefault();setDrag(false);pf(e.dataTransfer.files[0]);}} onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
+            style={{border:`2px dashed ${drag?pv.color:prev?pv.color+"33":"rgba(255,255,255,0.05)"}`,borderRadius:13,padding:"28px 16px",textAlign:"center",cursor:"pointer",background:drag?`${pv.color}05`:prev?`${pv.color}02`:"rgba(255,255,255,0.01)"}}>
+            <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>pf(e.target.files[0])}/>
+            {prev?<div><img src={prev} style={{maxHeight:170,maxWidth:"100%",borderRadius:8,marginBottom:8,border:`1px solid ${pv.color}20`,objectFit:"contain"}}/><p style={{color:pv.color,fontSize:11,fontWeight:700}}>✓ Ready</p></div>
+            :<div><div style={{fontSize:42,marginBottom:8}}>📸</div><p style={{color:"#c8d8e8",fontWeight:700,fontSize:13}}>Screenshot আপলোড করুন</p><p style={{color:"#1a2a34",fontSize:10,marginTop:3}}>সব ম্যাচ AI বিশ্লেষণ হবে</p></div>}
+          </div>
+          {prev&&<button onClick={runShot} disabled={load} style={BP(load)}>{load?msg||"⏳ বিশ্লেষণ...":"⚡ সব ম্যাচ বিশ্লেষণ করুন"}</button>}
+          <Err msg={er}/>
+          {results.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <p style={{color:"#00ff9d",fontSize:10,fontWeight:700}}>✅ {results.length} ম্যাচ</p>
+              <button onClick={()=>results.forEach(r=>!r.error&&addAcc(r))} style={{background:"rgba(0,255,157,0.06)",border:"1px solid rgba(0,255,157,0.12)",borderRadius:6,padding:"3px 9px",cursor:"pointer",color:"#00ff9d",fontWeight:700,fontSize:9}}>সব → Accum</button>
+            </div>
+            {results.map((r,i)=><MCard key={i} r={r} idx={i} onAdd={addAcc} pc={pv.color}/>)}
+          </div>}
+        </div>}
+
+        {/* Manual */}
+        {tab==="manual"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>{SPORTS.map(s=><button key={s.id} onClick={()=>{setSport(s.id);setSm([]);}} style={{padding:"8px 13px",borderRadius:28,border:`1px solid ${sport===s.id?pv.color:"rgba(255,255,255,0.05)"}`,background:sport===s.id?`${pv.color}11`:"rgba(255,255,255,0.01)",color:sport===s.id?pv.color:"#334455",cursor:"pointer",fontSize:12,fontWeight:600}}>{s.icon} {s.label}</button>)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}><input placeholder="Team A" value={tA} onChange={e=>setTA(e.target.value)} style={INP}/><input placeholder="Team B" value={tB} onChange={e=>setTB(e.target.value)} style={INP}/></div>
+          <input placeholder="League (optional)" value={league} onChange={e=>setLeague(e.target.value)} style={INP}/>
+          <div><p style={{color:"#2a3a44",fontSize:10,fontWeight:700,letterSpacing:1,marginBottom:7}}>MARKETS</p><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{getDynamicMarkets(sport).map(m=><button key={m} onClick={()=>togM(m)} style={{padding:"6px 11px",borderRadius:18,border:`1px solid ${sm.includes(m)?pv.color:"rgba(255,255,255,0.04)"}`,background:sm.includes(m)?`${pv.color}0f`:"rgba(255,255,255,0.01)",color:sm.includes(m)?pv.color:"#2a3a44",cursor:"pointer",fontSize:11,fontWeight:600}}>{m}</button>)}</div></div>
+          <button onClick={runManual} disabled={load} style={BP(load)}>{load?msg||"⏳ তৈরি করছি...":"🎯 AI Prediction নিন"}</button>
+          <Err msg={er}/>
+          {manR&&<MCard r={manR} idx={0} onAdd={addAcc} pc={pv.color}/>}
+        </div>}
+
+        {/* BetSlip */}
+        {tab==="slip"&&<SlipTab/>}
+
+        {/* Accumulator */}
+        {tab==="accumulator"&&<div style={{display:"flex",flexDirection:"column",gap:11}}>
+          <div style={{background:"rgba(255,255,255,0.015)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:13,padding:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
+              <p style={{color:"#c8d8e8",fontWeight:800,fontSize:12}}>🔗 Multi-Bet Accumulator</p>
+              {accum.length>0&&<button onClick={()=>setAccum([])} style={{background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.11)",color:"#ff6060",borderRadius:5,padding:"2px 8px",cursor:"pointer",fontSize:9}}>🗑️</button>}
+            </div>
+            {accum.length===0?<p style={{color:"#0a1418",textAlign:"center",padding:"20px 0",fontSize:11}}>কোনো bet নেই।</p>
+            :<div style={{display:"flex",flexDirection:"column",gap:5}}>{accum.map(a=><div key={a.id} style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.012)",borderRadius:7,padding:"7px 10px",border:"1px solid rgba(255,255,255,0.03)"}}><div style={{flex:1,minWidth:0,marginRight:7}}><div style={{color:"#c8d8e8",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.match}</div><div style={{color:"#1a2a34",fontSize:9,marginTop:1}}>{a.market}</div></div><span style={{color:"#00ff9d",fontWeight:900,fontSize:13,fontFamily:"monospace",marginRight:6}}>{a.prob}%</span><button onClick={()=>setAccum(s=>s.filter(x=>x.id!==a.id))} style={{background:"rgba(255,77,77,0.05)",border:"1px solid rgba(255,77,77,0.1)",color:"#ff6060",borderRadius:4,padding:"1px 6px",cursor:"pointer",fontSize:9}}>✕</button></div>)}</div>}
+          </div>
+          {accum.length>0&&<div style={{background:ap<30?"rgba(255,77,77,0.03)":"rgba(0,255,157,0.02)",border:`1px solid ${ap<30?"rgba(255,77,77,0.1)":"rgba(0,255,157,0.08)"}`,borderRadius:13,padding:14}}>
+            <p style={{color:"#0e1a20",fontSize:8,fontWeight:700,letterSpacing:1,margin:"0 0 3px"}}>COMBINED</p>
+            <div style={{fontSize:36,fontWeight:900,color:ap<30?"#ff5555":"#00ff9d",fontFamily:"monospace",marginBottom:3}}>{ap}%</div>
+            <p style={{color:"#0e1a20",fontSize:9,marginBottom:9}}>{accum.length} selections · Risk: <b style={{color:ap<25?"#ff5555":ap<50?"#ffc107":"#00ff9d"}}>{ap<25?"Very High":ap<50?"High":"Medium"}</b></p>
+            <Bar v={ap} c={ap<30?"#ff4d4d":"#00ff9d"} h={6}/>
+            {ap<30&&<div style={{background:"rgba(255,77,77,0.04)",border:"1px solid rgba(255,77,77,0.09)",borderRadius:7,padding:"7px 10px",marginTop:9}}><p style={{color:"#ff5555",fontSize:9,fontWeight:700}}>⚠️ Multi-bet এ risk অনেক বেড়ে যায়।</p></div>}
+          </div>}
+        </div>}
+
+        {/* History */}
+        {tab==="history"&&<HistoryTab pv={pv}/>}
+
+        {/* Profile */}
+        {tab==="profile"&&<ProfileTab pv={pv} onUpgrade={()=>setShowUpgrade(true)} onManage={()=>setShowManage(true)}/>}
+
+      </div>
+
+      {/* Bottom Nav */}
+      <BottomNav tab={tab} setTab={switchTab} pv={pv} accumLen={accum.length}/>
+
+      {/* Modals */}
+      {showUpgrade&&<UpgradeModal onClose={()=>setShowUpgrade(false)} onSuccess={()=>{setPlanR(r=>r+1);}}/>}
+      {showManage&&<ManageModal onClose={()=>setShowManage(false)} onRefresh={()=>setPlanR(r=>r+1)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
